@@ -610,7 +610,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
     const me = el("li", "empty", "You're in group \u201c" + group + "\u201d as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + ". ");
     const leave = el("button", "link", "Leave group"); leave.type = "button";
-    leave.addEventListener("click", () => { if (!confirm("Leave this group? Your cave stays with your account.")) return; try { localStorage.removeItem(JOIN_KEY); } catch {} location.reload(); });
+    leave.addEventListener("click", () => { if (confirm("Leave this group? Your cave stays with your account.")) leaveGroup(); });
     const out = el("button", "link", "Sign out"); out.type = "button";
     out.addEventListener("click", () => { if (confirm("Sign out? Your cave stays saved to your Google account.")) Auth.signOut(auth); });
     me.append(leave, " ", out);
@@ -1010,10 +1010,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     if (g.length < 6) { $("joinMsg").textContent = "Use a group code of at least 6 letters, numbers or dashes."; return; }
     if (!n) { $("joinMsg").textContent = "Add the name other people will see."; return; }
     if (!authUser) { $("joinMsg").textContent = "Sign in with Google first."; return; }
-    group = g; myNick = n;
-    try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
     $("joinMsg").textContent = "";
-    render(true); connect();
+    joinGroup(g, n);
   });
 
   async function sendGift(o, kind) {
@@ -1071,7 +1069,6 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }, () => {});
   }
 
-  let saveDoc = null, lastRemote = 0;
   async function loadConfig() {
     try {
       const m = await import("./firebase-config.js");
@@ -1092,13 +1089,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       A.onAuthStateChanged(auth, async (u) => {
         if (u && !u.providerData.some(p => p.providerId === "google.com")) { await A.signOut(auth); return; }
         authReady = true;
-        if (u && (!authUser || authUser.uid !== u.uid)) {
-          authUser = u;
-          if (!$("joinNick").value) $("joinNick").value = (u.displayName || "").split(" ")[0].slice(0, 24);
-          connect();
-        } else if (!u && authUser) {
-          authUser = null; disconnect();
-        }
+        if (u && (!authUser || authUser.uid !== u.uid)) { authUser = u; await loadAccount(); }
+        else if (!u && authUser) { authUser = null; disconnect(); }
         render(true);
       });
     } catch (e) {
@@ -1119,53 +1111,108 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     });
   }
 
-  function disconnect() {
-    if (giftUnsub) { giftUnsub(); giftUnsub = null; }
-    if (othersUnsub) { othersUnsub(); othersUnsub = null; }
-    if (visiting) goHome();
-    db = null; myId = null; saveDoc = null; myGifts = []; others = []; othersKey = "";
-    $("saveNote").textContent = "Progress saves on this device.";
-    render(true);
-  }
+  // Everything that belongs to the person lives under users/<uid>, so it follows them to any device:
+  //   users/<uid>            which group they're in and their name
+  //   users/<uid>/data/save  their cave
+  const userDoc = () => F.doc(db, "users/" + myId);
+  let saveDoc = null, saveLoaded = false, lastRemote = 0, savedAt = 0, saveError = "";
 
-  async function connect() {
-    if (!configured || !group || !authUser) { render(true); return; }
+  async function loadAccount() {
+    saveLoaded = false; saveError = "";
     try {
-      connectError = "";
       db = F.getFirestore(fbApp); canWrite = true;
       myId = authUser.uid;
-      saveDoc = F.doc(db, base() + "/saves/" + myId);
-      const snap = await F.getDoc(saveDoc);
+      saveDoc = F.doc(db, "users/" + myId + "/data/save");
+
+      // 1. Group and name: take them from the account if this device doesn't have them yet.
+      const prof = await F.getDoc(userDoc());
+      const p = prof.exists() ? prof.data() : {};
+      if (p.group && !group) {
+        group = p.group; myNick = p.nick || myNick;
+        try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
+      } else if (group && p.group !== group) {
+        await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() });
+      }
+      if (!$("joinNick").value) $("joinNick").value = (myNick || (authUser.displayName || "").split(" ")[0]).slice(0, 24);
+
+      // 2. The cave. Older versions kept it inside the group, so look there too.
+      let snap = await F.getDoc(saveDoc);
+      if (!snap.exists() && group) snap = await F.getDoc(F.doc(db, "groups/" + group + "/saves/" + myId));
       if (snap.exists()) {
         const remote = normalise(snap.data());
         // Keep whichever cave has come further, so a fresh device never overwrites real progress.
         if (remote && remote.pastTotal + remote.lifetime >= allTime()) {
           const from = remote.lastTick; state = remote; catchUp(from); saveLocal();
           lastSceneKey = ""; lastVisKey = "";
+          if (remote.pastTotal + remote.lifetime > 0) news("Your saved cave was loaded from your Google account.");
         }
       }
-      nicks[myId] = myNick;
-      $("saveNote").textContent = "Progress saves to your Google account, on any device.";
-      myGifts = [];
-      subscribeGifts(); subscribeOthers();
-      await pushCloud(true); render(true);
+      saveLoaded = true;
+      await pushCloud(true);
+
+      // 3. The group, if there is one.
+      if (group) startGroup();
+      render(true);
     } catch (e) {
-      db = null;
-      connectError = "Couldn't reach the shared caves (" + (e.code || e.message || "error") + "). Your cave keeps growing on this device.";
+      db = null; myId = null; saveDoc = null;
+      connectError = "Couldn't load your cave from your account (" + (e.code || e.message || "error") + "). It keeps growing on this device.";
       render(true);
     }
   }
+
+  function startGroup() {
+    nicks[myId] = myNick;
+    myGifts = [];
+    subscribeGifts(); subscribeOthers();
+    pushCloud(true);
+  }
+
+  async function joinGroup(g, n) {
+    group = g; myNick = n;
+    try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
+    try { await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() }); } catch {}
+    startGroup(); render(true);
+  }
+
+  async function leaveGroup() {
+    try { if (db && myId) await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
+    try { localStorage.removeItem(JOIN_KEY); } catch {}
+    location.reload();
+  }
+
+  function disconnect() {
+    if (giftUnsub) { giftUnsub(); giftUnsub = null; }
+    if (othersUnsub) { othersUnsub(); othersUnsub = null; }
+    if (visiting) goHome();
+    db = null; myId = null; saveDoc = null; saveLoaded = false; myGifts = []; others = []; othersKey = "";
+    updateSaveNote(); render(true);
+  }
+
+  function updateSaveNote() {
+    $("saveNote").textContent = !saveLoaded ? "Progress saves on this device."
+      : saveError ? "Couldn't save to your Google account (" + saveError + "). Progress is still kept on this device."
+      : savedAt ? "Saved to your Google account at " + new Date(savedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + "."
+      : "Saving to your Google account...";
+  }
+
   async function pushCloud(force) {
-    if (!saveDoc) return;
+    // Never write before the account's cave has been read, or a fresh device could overwrite it.
+    if (!saveDoc || !saveLoaded) return;
     if (!force && Date.now() - lastRemote < 60000) return;
     lastRemote = Date.now();
     try {
       await F.setDoc(saveDoc, JSON.parse(JSON.stringify(state)));
-      await F.setDoc(F.doc(db, base() + "/caves/" + myId), {
-        nick: myNick, seed: state.seed, name: genCave(state.seed).name, caveNo: state.caveNo,
-        lifetime: state.lifetime, allTime: allTime(), home: state.unlocked, dpm: dripsPerMin(), created: state.created, updated: Date.now()
-      });
-    } catch {}
+      savedAt = Date.now(); saveError = "";
+    } catch (e) { saveError = e.code || "error"; }
+    if (group) {
+      try {
+        await F.setDoc(F.doc(db, base() + "/caves/" + myId), {
+          nick: myNick, seed: state.seed, name: genCave(state.seed).name, caveNo: state.caveNo,
+          lifetime: state.lifetime, allTime: allTime(), home: state.unlocked, dpm: dripsPerMin(), created: state.created, updated: Date.now()
+        });
+      } catch {}
+    }
+    updateSaveNote();
   }
 
   function catchUp(fromTick) {
