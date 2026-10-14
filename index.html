@@ -314,7 +314,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     pastTotal: prev ? prev.pastTotal : 0,
     unlocked: prev ? prev.unlocked : {},
     sent: prev ? prev.sent : {},
-    seenGifts: prev ? prev.seenGifts : []
+    seenGifts: prev ? prev.seenGifts : [],
+    epoch: prev ? prev.epoch : 0   // changes only when everything is erased
   });
 
   function normalise(s) {
@@ -335,7 +336,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       pastTotal: Number.isFinite(s.pastTotal) ? s.pastTotal : past.reduce((a, p) => a + (Number(p.lifetime) || 0), 0),
       unlocked: (s.unlocked && typeof s.unlocked === "object") ? Object.assign({}, s.unlocked) : {},
       sent: (s.sent && typeof s.sent === "object") ? Object.assign({}, s.sent) : {},
-      seenGifts: Array.isArray(s.seenGifts) ? s.seenGifts.slice(-300) : []
+      seenGifts: Array.isArray(s.seenGifts) ? s.seenGifts.slice(-300) : [],
+      epoch: Number(s.epoch) || 0
     };
   }
   function loadLocal() { try { const raw = localStorage.getItem(KEY); return raw ? normalise(JSON.parse(raw)) : null; } catch { return null; } }
@@ -1140,15 +1142,15 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       if (!snap.exists() && group) snap = await F.getDoc(F.doc(db, "groups/" + group + "/saves/" + myId));
       if (snap.exists()) {
         const remote = normalise(snap.data());
-        // Keep whichever cave has come further, so a fresh device never overwrites real progress.
-        if (remote && remote.pastTotal + remote.lifetime >= allTime()) {
-          const from = remote.lastTick; state = remote; catchUp(from); saveLocal();
-          lastSceneKey = ""; lastVisKey = "";
-          if (remote.pastTotal + remote.lifetime > 0) news("Your saved cave was loaded from your Google account.");
+        // A newer "erase everything" always wins. Otherwise keep whichever cave has come further,
+        // so a fresh device never overwrites real progress.
+        if (remote && (remote.epoch > state.epoch || (remote.epoch === state.epoch && remote.pastTotal + remote.lifetime >= allTime()))) {
+          adoptRemote(remote, remote.pastTotal + remote.lifetime > 0 ? "Your saved cave was loaded from your Google account." : "");
         }
       }
       saveLoaded = true;
       await pushCloud(true);
+      watchSave();
 
       // 3. The group, if there is one.
       if (group) startGroup();
@@ -1158,6 +1160,30 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       connectError = "Couldn't load your cave from your account (" + (e.code || e.message || "error") + "). It keeps growing on this device.";
       render(true);
     }
+  }
+
+  function adoptRemote(remote, msg) {
+    const from = remote.lastTick; state = remote; catchUp(from); saveLocal();
+    lastSceneKey = ""; lastVisKey = ""; minuteKey = "";
+    if (msg) news(msg);
+    render(true);
+  }
+
+  // If everything gets erased on another device, follow along here too.
+  let saveUnsub = null, remoteEpoch = 0;
+  function watchSave() {
+    if (saveUnsub) saveUnsub();
+    saveUnsub = F.onSnapshot(saveDoc, (snap) => {
+      if (!snap.exists()) return;
+      const remote = normalise(snap.data());
+      if (!remote) return;
+      remoteEpoch = Math.max(remoteEpoch, remote.epoch);
+      if (remote.epoch > state.epoch) {
+        myGifts = [];
+        $("news").textContent = "";
+        adoptRemote(remote, "Everything was erased on another device, so this one starts over too.");
+      }
+    }, () => {});
   }
 
   function startGroup() {
@@ -1183,6 +1209,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   function disconnect() {
     if (giftUnsub) { giftUnsub(); giftUnsub = null; }
     if (othersUnsub) { othersUnsub(); othersUnsub = null; }
+    if (saveUnsub) { saveUnsub(); saveUnsub = null; }
+    remoteEpoch = 0;
     if (visiting) goHome();
     db = null; myId = null; saveDoc = null; saveLoaded = false; myGifts = []; others = []; othersKey = "";
     updateSaveNote(); render(true);
@@ -1198,6 +1226,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   async function pushCloud(force) {
     // Never write before the account's cave has been read, or a fresh device could overwrite it.
     if (!saveDoc || !saveLoaded) return;
+    if (remoteEpoch > state.epoch) return; // this device is out of date; the watcher will catch up
     if (!force && Date.now() - lastRemote < 60000) return;
     lastRemote = Date.now();
     try {
@@ -1220,11 +1249,25 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     if (away > 60000 && gain > 0) news("While you were away for " + duration(away / 1000) + ", " + mass(gain) + " of calcite settled.");
   }
 
-  $("wipe").addEventListener("click", () => {
-    if (!confirm("Erase everything, including past caves and your experience bonus?")) return;
-    state = freshCave(); myGifts = [];
+  $("wipe").addEventListener("click", async () => {
+    if (!confirm("Erase everything, including past caves, unlocks, visitors and your experience bonus?")) return;
+    const epoch = Math.max(Date.now(), state.epoch + 1, remoteEpoch + 1);
+    state = freshCave(); state.epoch = epoch;
+    myGifts = [];
+    if (visiting) goHome();
     $("news").textContent = "";
-    saveLocal(); pushCloud(true); subscribeGifts(); render(true);
+    lastSceneKey = ""; lastVisKey = ""; minuteKey = "";
+    saveLocal(); render(true);
+    // Visitors live in the group, so remove the ones sent to you as well.
+    if (db && myId && group) {
+      try {
+        const snap = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", myId)));
+        await Promise.all(snap.docs.map(d => F.deleteDoc(d.ref)));
+      } catch {}
+    }
+    await pushCloud(true);
+    news("Everything was erased. A new cave begins.");
+    render(true);
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { advance(Date.now()); saveLocal(); pushCloud(true); }
