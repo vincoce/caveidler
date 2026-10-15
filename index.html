@@ -152,44 +152,114 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .rank li.me .nm { color: var(--ochre); }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.925rem; color: var(--muted); }
 .note-q { color: var(--ink); font-style: italic; }
+
+/* ---- menu and pages ---- */
+.top {
+  position: sticky; top: 0; z-index: 20; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 21; background: var(--bg); }
+.topin { max-width: 960px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.brand { font: 400 1.5rem/1 "Young Serif", Georgia, serif; color: var(--ink); text-decoration: none; }
+.menu { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+.menu::-webkit-scrollbar { display: none; }
+.menu a { position: relative; text-decoration: none; color: var(--muted); padding: 8px 14px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
+.menu a:hover { color: var(--ink); }
+.menu a[aria-current="page"] { background: var(--btn); color: var(--btn-ink); }
+.menu a:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+.badge[hidden] { display: none; }
+.badge { display: inline-block; min-width: 8px; height: 8px; border-radius: 50%; background: var(--ochre); margin-left: 6px; vertical-align: 2px; }
+main { padding-top: 18px; }
+.page[hidden] { display: none; }
+.page.narrow { max-width: 640px; }
+.page > section + section, .page .cols { margin-top: 0; }
+.page > section + section { margin-top: 34px; }
+.page[data-page="cave"] .cols { margin-top: 30px; }
+.lede.small { font-size: 0.9rem; margin-top: 34px; }
+.news { margin: 0 0 14px; }
+.news:empty { display: none; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+.grid2 > li:nth-last-child(2) { border-bottom: 1px solid var(--line); }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } .grid2 > li:nth-last-child(2) { border-bottom: 0; } }
+/* On phones the menu becomes a tab bar along the bottom edge. */
+@media (max-width: 640px) {
+  .topin { padding: 10px 16px; }
+  .menu {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: var(--panel); border-top: 1px solid var(--line);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    gap: 2px; overflow: visible;
+  }
+  .menu a { flex: 1 1 0; text-align: center; padding: 9px 2px; font-size: 0.8rem; border-radius: 10px; }
+  .badge { position: absolute; top: 6px; right: 8px; margin: 0; }
+  main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
 </style>
 </head>
 <body>
+<header class="top">
+  <div class="topin">
+    <a class="brand" href="#cave">Dripstone</a>
+    <nav class="menu" aria-label="Pages">
+      <a href="#cave" data-page="cave">Cave</a>
+      <a href="#explore" data-page="explore">Explore<span class="badge" id="badgeExplore" hidden></span></a>
+      <a href="#group" data-page="group">Group<span class="badge" id="badgeGroup" hidden></span></a>
+      <a href="#collection" data-page="collection">Collection</a>
+      <a href="#rankings" data-page="rankings">Rankings</a>
+    </nav>
+  </div>
+</header>
 <main>
-  <h1>Dripstone</h1>
-  <p class="lede">Water seeps through the rock and leaves a trace of calcite with every drop. Nothing here needs clicking. Come back in an hour, or a week, and the cave will have grown. Every cave you find looks different.</p>
-
-  <div class="cavehead">
-    <div class="cavename" id="caveName">Cave</div>
-    <button class="ghost" id="backHome" hidden>Back to your cave</button>
-  </div>
-  <div class="cave" id="caveBox">
-    <svg id="scene" viewBox="0 0 800 400" role="img" aria-label="Cave cross-section">
-      <g id="base"></g>
-      <g id="visG"></g>
-      <g id="flyG"></g>
-      <g id="drops"></g>
-    </svg>
-  </div>
-
-  <div class="status">
-    <div><div class="k">Calcite to spend</div><div class="v" id="stock">0 mg</div><div class="s" id="lifetime">0 mg deposited in this cave</div></div>
-    <div><div class="k">Deposit rate</div><div class="v" id="rate">0</div><div class="s" id="drips">0 drips a minute</div></div>
-    <div><div class="k">Above ground</div><div class="v" id="season">Steady seep</div><div class="s" id="seasonNote"></div></div>
-  </div>
   <ul class="news" id="news" aria-live="polite"></ul>
 
-  <div class="cols">
-    <div>
+  <div class="page" data-page="cave">
+    <div class="cavehead">
+      <div class="cavename" id="caveName">Cave</div>
+      <button class="ghost" id="backHome" hidden>Back to your cave</button>
+    </div>
+    <div class="cave" id="caveBox">
+      <svg id="scene" viewBox="0 0 800 400" role="img" aria-label="Cave cross-section">
+        <g id="base"></g>
+        <g id="visG"></g>
+        <g id="flyG"></g>
+        <g id="drops"></g>
+      </svg>
+    </div>
+    <div class="status">
+      <div><div class="k">Calcite to spend</div><div class="v" id="stock">0 mg</div><div class="s" id="lifetime">0 mg deposited in this cave</div></div>
+      <div><div class="k">Deposit rate</div><div class="v" id="rate">0</div><div class="s" id="drips">0 drips a minute</div></div>
+      <div><div class="k">Above ground</div><div class="v" id="season">Steady seep</div><div class="s" id="seasonNote"></div></div>
+    </div>
+    <div class="cols">
       <section>
         <h2>Shape the water's path</h2>
         <p class="sub" id="upSub">Spend calcite to send more water, or richer water, into the cave.</p>
         <div id="upgrades"></div>
       </section>
       <section>
-        <h2>Find a new cave</h2>
-        <div class="move" id="move"></div>
+        <h2>Cave journal</h2>
+        <p class="sub" id="journalSub">Each new formation makes this cave deposit more.</p>
+        <ul class="journal" id="journal"></ul>
       </section>
+    </div>
+    <p class="lede small">Water seeps through the rock and leaves a trace of calcite with every drop. Nothing here needs clicking. Come back in an hour, or a week, and the cave will have grown.</p>
+  </div>
+
+  <div class="page" data-page="explore" hidden>
+    <section>
+      <h2>Find a new cave</h2>
+      <div class="move" id="move"></div>
+    </section>
+    <section id="atlasBox" hidden>
+      <h2>Cave atlas</h2>
+      <p class="sub">Every cave you've left behind, as you left it.</p>
+      <div class="cards" id="atlas"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="group" hidden>
+    <div class="cols">
       <section id="groupBox">
         <h2>Your group</h2>
         <p class="sub">Everyone in a group sees each other's caves and can send visitors.</p>
@@ -210,55 +280,50 @@ details.owner summary { cursor: pointer; font-weight: 600; }
         </details>
         <ul class="list" id="others"></ul>
       </section>
-      <section id="projectBox" hidden>
-        <h2>Group project</h2>
-        <p class="sub">Everyone gives calcite to one giant column. Every finished stage makes every member's cave deposit 10% more per drop.</p>
-        <div class="project"><svg id="projectSvg" viewBox="0 0 800 240" role="img" aria-label="The group's column"></svg></div>
-        <p id="projectStatus"></p>
-        <div class="acts" id="giveActs">
-          <button class="ghost" type="button" data-frac="0.1">Give 10% of your calcite</button>
-          <button class="ghost" type="button" data-frac="0.5">Give half</button>
-          <button class="ghost" type="button" data-frac="1">Give all</button>
-        </div>
-        <ul class="list" id="projectContrib" style="margin-top:14px"></ul>
-      </section>
-      <section id="rankBox">
-        <h2>Rankings</h2>
-        <p class="sub" id="rankSub">Everyone who plays, ranked by all-time calcite.</p>
-        <label class="check" id="publicWrap" hidden><input type="checkbox" id="publicToggle"> Show me in the rankings</label>
-        <div class="tabs" id="rankTabs" hidden>
-          <button class="ghost" type="button" data-tab="players" aria-pressed="true">Players</button>
-          <button class="ghost" type="button" data-tab="groups" aria-pressed="false">Groups</button>
-          <button class="ghost" type="button" data-tab="now" aria-pressed="false">Playing now</button>
-          <button class="link" type="button" id="rankRefresh">Refresh</button>
-        </div>
-        <ol class="rank" id="rankList"></ol>
-      </section>
-    </div>
-    <div>
-      <section>
-        <h2>Cave journal</h2>
-        <p class="sub" id="journalSub">Each new formation makes this cave deposit more.</p>
-        <ul class="journal" id="journal"></ul>
-      </section>
-      <section>
-        <h2>Visitors</h2>
-        <p class="sub">What people in your group have sent you. They stay with you when you move to a new cave.</p>
-        <ul class="list" id="visitors"></ul>
-      </section>
-      <section>
-        <h2>Collection</h2>
-        <p class="sub" id="allTime"></p>
-        <ul class="list" id="collection"></ul>
-      </section>
+      <div>
+        <section id="projectBox" hidden>
+          <h2>Group project</h2>
+          <p class="sub">Everyone gives calcite to one giant column. Every finished stage makes every member's cave deposit 10% more per drop.</p>
+          <div class="project"><svg id="projectSvg" viewBox="0 0 800 240" role="img" aria-label="The group's column"></svg></div>
+          <p id="projectStatus"></p>
+          <div class="acts" id="giveActs">
+            <button class="ghost" type="button" data-frac="0.1">Give 10% of your calcite</button>
+            <button class="ghost" type="button" data-frac="0.5">Give half</button>
+            <button class="ghost" type="button" data-frac="1">Give all</button>
+          </div>
+          <ul class="list" id="projectContrib" style="margin-top:14px"></ul>
+        </section>
+        <section>
+          <h2>Visitors you received</h2>
+          <p class="sub">What people in your group have sent you. They stay with you when you move to a new cave.</p>
+          <ul class="list" id="visitors"></ul>
+        </section>
+      </div>
     </div>
   </div>
 
-  <section id="atlasBox" hidden style="margin-top:40px">
-    <h2>Cave atlas</h2>
-    <p class="sub">Every cave you've left behind, as you left it.</p>
-    <div class="cards" id="atlas"></div>
-  </section>
+  <div class="page" data-page="collection" hidden>
+    <section>
+      <h2>Collection</h2>
+      <p class="sub" id="allTime"></p>
+      <ul class="list grid2" id="collection"></ul>
+    </section>
+  </div>
+
+  <div class="page narrow" data-page="rankings" hidden>
+    <section id="rankBox">
+      <h2>Rankings</h2>
+      <p class="sub" id="rankSub">Everyone who plays, ranked by all-time calcite.</p>
+      <label class="check" id="publicWrap" hidden><input type="checkbox" id="publicToggle"> Show me in the rankings</label>
+      <div class="tabs" id="rankTabs" hidden>
+        <button class="ghost" type="button" data-tab="players" aria-pressed="true">Players</button>
+        <button class="ghost" type="button" data-tab="groups" aria-pressed="false">Groups</button>
+        <button class="ghost" type="button" data-tab="now" aria-pressed="false">Playing now</button>
+        <button class="link" type="button" id="rankRefresh">Refresh</button>
+      </div>
+      <ol class="rank" id="rankList"></ol>
+    </section>
+  </div>
 
   <div class="foot">
     <span id="saveNote">Progress saves on this device.</span>
@@ -462,6 +527,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
     seenGifts: prev ? prev.seenGifts : [],
     epoch: prev ? prev.epoch : 0,     // changes only when everything is erased
     choices: null,                    // the caves on offer when moving on
+    choicesSeen: false,               // has the player looked at them yet
     public: prev ? prev.public : true // listed in the rankings
   });
 
@@ -488,6 +554,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
       seenGifts: Array.isArray(s.seenGifts) ? s.seenGifts.slice(-300) : [],
       epoch: Number(s.epoch) || 0,
       choices: choices && choices.length ? choices : null,
+      choicesSeen: !!s.choicesSeen,
       public: s.public !== false
     };
   }
@@ -629,6 +696,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
     minuteKey = key;
     renderJournal(); renderMove(); renderCollection(); renderVisitors();
     renderGroup(); renderProject(); renderRankings(); renderAtlas();
+    updateBadges();
   }
 
   function renderJournal() {
@@ -692,7 +760,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
     state.seed = choice.seed; state.caveType = choice.type;
     lastSceneKey = ""; lastVisKey = ""; moveKey = ""; atlasKey = "";
     news("You found " + next.name + ", a " + next.type.name.toLowerCase() + ". The first drops are already falling.");
-    saveLocal(); pushCloud(true); render(true);
+    saveLocal(); pushCloud(true); go("cave"); render(true);
   }
 
   // ---------------- atlas ----------------
@@ -1412,8 +1480,8 @@ details.owner summary { cursor: pointer; font-weight: 600; }
   async function visit(o) {
     visiting = { id: o.id, seed: o.seed >>> 0, type: o.type || "limestone", lifetime: o.lifetime, dpm: o.dpm, home: o.home || {}, gifts: [] };
     $("caveBox").classList.add("visiting"); $("backHome").hidden = false;
+    go("cave");
     clearDrops(); render(true);
-    window.scrollTo({ top: $("caveName").getBoundingClientRect().top + window.scrollY - 20, behavior: reduceMotion ? "auto" : "smooth" });
     try {
       const snap = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", o.id)));
       const gs = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(g => KIND[g.kind]);
@@ -1425,7 +1493,37 @@ details.owner summary { cursor: pointer; font-weight: 600; }
     for (const d of drops) d.el.remove(); drops.length = 0;
     if (flight) { flight.el.remove(); flight = null; nextFlight = Date.now() + flightGap(); }
   }
-  $("backHome").addEventListener("click", goHome);
+  $("backHome").addEventListener("click", () => { goHome(); go("group"); });
+
+
+  // ---------------- pages ----------------
+  const PAGES = ["cave", "explore", "group", "collection", "rankings"];
+  let page = "cave";
+  function showPage(name, noScroll) {
+    if (!PAGES.includes(name)) name = "cave";
+    const changed = name !== page;
+    page = name;
+    for (const p of document.querySelectorAll(".page")) p.hidden = p.dataset.page !== name;
+    for (const a of document.querySelectorAll(".menu a")) {
+      if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    }
+    if (name === "group") seenGiftCount = myGifts.length;
+    if (name === "explore" && state.lifetime >= NEW_CAVE_AT && !state.choicesSeen) { state.choicesSeen = true; saveLocal(); }
+    updateBadges();
+    if (name === "rankings") loadRankings(false);
+    if (changed && !noScroll) window.scrollTo({ top: 0 });
+    render(true);
+  }
+  window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+  const go = (name) => { if (location.hash !== "#" + name) location.hash = name; else showPage(name); };
+
+  // Small dots in the menu: a new cave is waiting to be chosen, or new visitors arrived.
+  let seenGiftCount = -1;
+  function updateBadges() {
+    $("badgeExplore").hidden = !(state.lifetime >= NEW_CAVE_AT && !state.choicesSeen && page !== "explore");
+    if (seenGiftCount < 0) seenGiftCount = myGifts.length;
+    $("badgeGroup").hidden = !(myGifts.length > seenGiftCount && page !== "group");
+  }
 
   // ---------------- online play (Firebase) ----------------
   // Your Firebase settings live in firebase-config.js, so updating index.html never overwrites them.
@@ -1905,7 +2003,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 
   buildUpgrades();
   catchUp(state.lastTick);
-  render(true);
+  showPage(location.hash.slice(1), true);
   saveLocal();
   requestAnimationFrame(frame);
   setInterval(() => { advance(Date.now()); render(false); }, 1000);
