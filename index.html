@@ -997,7 +997,7 @@ main { padding-top: 18px; }
       who.append(nameOf(o.id) + "'s " + (o.name || "cave"));
       if (o.id === groupOwner) who.appendChild(el("span", "lvl", "owner"));
       li.append(who);
-      li.append(el("div", "meta", typeOf(o.type).name + ". " + mass(o.lifetime || 0) + " in this cave, " + mass(o.allTime || o.lifetime || 0) + " all-time. " + (isOnline(o.updated) ? "Playing right now." : o.updated ? "Last seen " + ago(o.updated) + "." : "")));
+      li.append(el("div", "meta", typeOf(o.type).name + ". " + mass(o.lifetime || 0) + " in this cave, " + mass(o.allTime || o.lifetime || 0) + " all-time. " + (isOnline(o.updated) ? "Playing right now." : "")));
       const acts = el("div", "acts");
       const look = el("button", "ghost", "Look inside"); look.type = "button";
       look.addEventListener("click", () => visit(o));
@@ -1691,7 +1691,7 @@ main { padding-top: 18px; }
       if (group !== g) return;
       const all = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
       for (const o of all) nicks[o.id] = o.nick || "Someone";
-      others = all.filter(o => o.id !== myId).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+      others = all.filter(o => o.id !== myId).sort((a, b) => (a.nick || "").localeCompare(b.nick || "")); // by name, not by activity
       if (visiting) {
         const o = others.find(x => x.id === visiting.id);
         if (!o) goHome();
