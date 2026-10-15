@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+
 :root {
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -111,6 +112,46 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   .status { grid-template-columns: 1fr 1fr; }
   .status > div:first-child { grid-column: 1 / -1; }
 }
+
+:root { --online: #3f9a5a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --online: #7fd39a; } }
+:root[data-theme="dark"] { --online: #7fd39a; }
+.join { grid-template-columns: 1fr 1fr 1fr auto; }
+@media (max-width: 640px) { .join { grid-template-columns: 1fr; } }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 12px; }
+.card { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; }
+.card svg { display: block; width: 100%; height: auto; }
+.card .body { padding: 10px 12px 12px; display: grid; gap: 3px; flex: 1; }
+.card .t { font-weight: 600; }
+.card .m { color: var(--muted); font-size: 0.875rem; }
+.card button { margin-top: 8px; justify-self: start; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--online); margin-right: 6px; vertical-align: 1px; }
+.online { color: var(--online); font-size: 0.85rem; font-weight: 500; }
+.acts input.note, .setrow input { font: 400 0.9rem/1.2 "Figtree", system-ui, sans-serif; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; min-width: 0; flex: 1 1 160px; }
+.setrow input { border-radius: 4px; }
+.acts input.note:focus-visible, .setrow input:focus-visible { outline: 2px solid var(--water); outline-offset: 1px; }
+.groupinfo { border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; margin-bottom: 14px; }
+.groupinfo .gname { font: 400 1.25rem/1.2 "Young Serif", Georgia, serif; }
+.groupinfo p { margin: 4px 0 0; color: var(--muted); font-size: 0.925rem; }
+details.owner { border: 1px solid var(--line); border-radius: 4px; padding: 10px 16px; margin-bottom: 14px; }
+details.owner summary { cursor: pointer; font-weight: 600; }
+.setrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; margin-top: 12px; }
+.setrow label { display: grid; gap: 4px; font-size: 0.875rem; color: var(--muted); }
+.setrow + p { margin: 6px 0 0; }
+.project { border-radius: 6px; overflow: hidden; line-height: 0; margin: 4px 0 12px; }
+.project svg { width: 100%; height: auto; display: block; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.tabs button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+.rank { list-style: none; padding: 0; margin: 0; counter-reset: r; }
+.rank li { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); align-items: baseline; }
+.rank li:last-child { border-bottom: 1px solid var(--line); }
+.rank .pos { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rank .nm { font-weight: 600; }
+.rank .sub2 { color: var(--muted); font-size: 0.875rem; font-weight: 400; display: block; }
+.rank .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
+.rank li.me .nm { color: var(--ochre); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.925rem; color: var(--muted); }
+.note-q { color: var(--ink); font-style: italic; }
 </style>
 </head>
 <body>
@@ -124,9 +165,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   </div>
   <div class="cave" id="caveBox">
     <svg id="scene" viewBox="0 0 800 400" role="img" aria-label="Cave cross-section">
-      <path id="ceiling" fill="var(--rock)"></path>
-      <path id="floor" fill="var(--rock)"></path>
-      <g id="formations"></g>
+      <g id="base"></g>
       <g id="visG"></g>
       <g id="flyG"></g>
       <g id="drops"></g>
@@ -144,34 +183,67 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     <div>
       <section>
         <h2>Shape the water's path</h2>
-        <p class="sub">Spend calcite to send more water, or richer water, into the cave.</p>
+        <p class="sub" id="upSub">Spend calcite to send more water, or richer water, into the cave.</p>
         <div id="upgrades"></div>
       </section>
       <section>
         <h2>Find a new cave</h2>
         <div class="move" id="move"></div>
       </section>
-      <section>
-        <h2>Other caves</h2>
-        <p class="sub">Everyone who joins with the same group code appears here. Send them a visitor, or look inside their cave.</p>
+      <section id="groupBox">
+        <h2>Your group</h2>
+        <p class="sub">Everyone in a group sees each other's caves and can send visitors.</p>
         <form class="join" id="join" hidden>
           <label>Group code<input id="joinCode" autocomplete="off" spellcheck="false" placeholder="for example cave-7392" maxlength="40"></label>
+          <label>Password<input id="joinPw" type="password" autocomplete="off" placeholder="optional" maxlength="64"></label>
           <label>Your name<input id="joinNick" autocomplete="nickname" maxlength="24"></label>
-          <button class="main" type="submit">Join group</button>
-          <p class="empty" id="joinMsg">Make up any code and give the same code to the people you want to play with. Anyone who has it can join.</p>
+          <button class="main" type="submit">Join</button>
+          <p class="empty" id="joinMsg">A code nobody uses yet creates a new group, and you become its owner. Add a password if you want one.</p>
         </form>
+        <div id="groupInfo"></div>
+        <details class="owner" id="ownerBox" hidden>
+          <summary>Group settings</summary>
+          <div class="setrow"><label>Group name (shown in the rankings)<input id="renameInput" maxlength="32"></label><button class="ghost" id="renameBtn" type="button">Rename</button></div>
+          <p class="empty" id="renameNote"></p>
+          <div class="setrow"><label>Password<input id="pwInput" type="password" autocomplete="new-password" maxlength="64" placeholder="leave empty to remove it"></label><button class="ghost" id="pwBtn" type="button">Save password</button></div>
+          <p class="empty" id="pwNote">People already in the group stay in. The password is only asked from new members.</p>
+        </details>
         <ul class="list" id="others"></ul>
+      </section>
+      <section id="projectBox" hidden>
+        <h2>Group project</h2>
+        <p class="sub">Everyone gives calcite to one giant column. Every finished stage makes every member's cave deposit 10% more per drop.</p>
+        <div class="project"><svg id="projectSvg" viewBox="0 0 800 240" role="img" aria-label="The group's column"></svg></div>
+        <p id="projectStatus"></p>
+        <div class="acts" id="giveActs">
+          <button class="ghost" type="button" data-frac="0.1">Give 10% of your calcite</button>
+          <button class="ghost" type="button" data-frac="0.5">Give half</button>
+          <button class="ghost" type="button" data-frac="1">Give all</button>
+        </div>
+        <ul class="list" id="projectContrib" style="margin-top:14px"></ul>
+      </section>
+      <section id="rankBox">
+        <h2>Rankings</h2>
+        <p class="sub" id="rankSub">Everyone who plays, ranked by all-time calcite.</p>
+        <label class="check" id="publicWrap" hidden><input type="checkbox" id="publicToggle"> Show me in the rankings</label>
+        <div class="tabs" id="rankTabs" hidden>
+          <button class="ghost" type="button" data-tab="players" aria-pressed="true">Players</button>
+          <button class="ghost" type="button" data-tab="groups" aria-pressed="false">Groups</button>
+          <button class="ghost" type="button" data-tab="now" aria-pressed="false">Playing now</button>
+          <button class="link" type="button" id="rankRefresh">Refresh</button>
+        </div>
+        <ol class="rank" id="rankList"></ol>
       </section>
     </div>
     <div>
       <section>
         <h2>Cave journal</h2>
-        <p class="sub">Each new formation makes this cave deposit 8% faster.</p>
+        <p class="sub" id="journalSub">Each new formation makes this cave deposit more.</p>
         <ul class="journal" id="journal"></ul>
       </section>
       <section>
         <h2>Visitors</h2>
-        <p class="sub">What other people have sent you. Visitors stay with you when you move to a new cave.</p>
+        <p class="sub">What people in your group have sent you. They stay with you when you move to a new cave.</p>
         <ul class="list" id="visitors"></ul>
       </section>
       <section>
@@ -179,23 +251,25 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
         <p class="sub" id="allTime"></p>
         <ul class="list" id="collection"></ul>
       </section>
-      <section id="pastWrap" hidden>
-        <h2>Caves you've left</h2>
-        <ul class="list" id="past"></ul>
-      </section>
     </div>
   </div>
+
+  <section id="atlasBox" hidden style="margin-top:40px">
+    <h2>Cave atlas</h2>
+    <p class="sub">Every cave you've left behind, as you left it.</p>
+    <div class="cards" id="atlas"></div>
+  </section>
 
   <div class="foot">
     <span id="saveNote">Progress saves on this device.</span>
     <button class="link" id="wipe">Erase everything</button>
   </div>
 </main>
-
 <script type="module">
 (() => {
   const KEY = "dripstone-save-v1";
-  const DAY = 86400000, HOUR = 3600000;
+  const DAY = 86400000, HOUR = 3600000, MIN = 60000;
+  const ONLINE_WINDOW = 3 * MIN;
 
   // ---------------- random ----------------
   function rng(seed) {
@@ -205,26 +279,83 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   const newSeed = () => (Math.random() * 4294967296) >>> 0;
 
-  // ---------------- cave generation ----------------
-  const PALETTES = [
-    { name: "limestone", light: { rock: "#8f877a", stone: "#f6f1e4", edge: "#b3a68c", cave: "#cfc9bc" }, dark: { rock: "#2e3b45", stone: "#ddd4c1", edge: "#9c8f76", cave: "#141d25" } },
-    { name: "iron",      light: { rock: "#9a7462", stone: "#f3dcc4", edge: "#b88d6c", cave: "#d8c6b8" }, dark: { rock: "#3b2a26", stone: "#d9b48f", edge: "#9a7357", cave: "#1d1514" } },
-    { name: "slate",     light: { rock: "#7d8a94", stone: "#eef2f2", edge: "#a2b0b4", cave: "#c7cfd3" }, dark: { rock: "#263440", stone: "#cfdcdc", edge: "#8396a0", cave: "#111a22" } },
-    { name: "honey",     light: { rock: "#94845f", stone: "#f5e2b5", edge: "#bfa46a", cave: "#d6ccb2" }, dark: { rock: "#33301f", stone: "#e0c27e", edge: "#a48a52", cave: "#1a1810" } },
-    { name: "moss",      light: { rock: "#7f8a72", stone: "#eef0e0", edge: "#a7ad8e", cave: "#cbcfbd" }, dark: { rock: "#28332a", stone: "#d3d6bf", edge: "#8d9478", cave: "#131a14" } }
-  ];
-  const ADJ = ["Whispering", "Amber", "Silent", "Weeping", "Lantern", "Fox", "Crooked", "Moonmilk", "Bear", "Owl", "Sleeping", "Copper", "Fern", "Echo", "Salt"];
-  const NOUN = ["Hollow", "Grotto", "Hall", "Shaft", "Chamber", "Cave", "Gallery", "Den", "Pit", "Passage"];
+
+  const randomId = () => { const a = new Uint8Array(9); crypto.getRandomValues(a); return [...a].map(x => (x % 36).toString(36)).join("") + Date.now().toString(36).slice(-3); };
+  async function sha256(t) {
+    const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+  }
+
+  // ---------------- cave types ----------------
+  const P = (rock, stone, edge, cave) => ({ rock, stone, edge, cave });
+  const CAVE_TYPES = {
+    limestone: {
+      name: "Limestone cave", shape: "cone", legacy: 1.5,
+      blurb: "The classic. Experience from earlier caves counts 50% more here.",
+      nouns: ["Hollow", "Grotto", "Hall", "Chamber", "Cave", "Gallery", "Den"],
+      palettes: [
+        { light: P("#8f877a", "#f6f1e4", "#b3a68c", "#cfc9bc"), dark: P("#2e3b45", "#ddd4c1", "#9c8f76", "#141d25") },
+        { light: P("#9a7462", "#f3dcc4", "#b88d6c", "#d8c6b8"), dark: P("#3b2a26", "#d9b48f", "#9a7357", "#1d1514") },
+        { light: P("#94845f", "#f5e2b5", "#bfa46a", "#d6ccb2"), dark: P("#33301f", "#e0c27e", "#a48a52", "#1a1810") },
+        { light: P("#7f8a72", "#eef0e0", "#a7ad8e", "#cbcfbd"), dark: P("#28332a", "#d3d6bf", "#8d9478", "#131a14") }
+      ]
+    },
+    wet: {
+      name: "Wet cave", shape: "cone", drips: 1.5, drop: 0.8, lake: true,
+      blurb: "Water everywhere: 50% more drips, each carrying 20% less calcite. A lake covers the floor.",
+      nouns: ["Spring", "Cistern", "Well", "Grotto", "Sump"],
+      palettes: [
+        { light: P("#6f8a86", "#e8f0ec", "#9fb8b2", "#c3d3d0"), dark: P("#22363a", "#cfe0da", "#7f9f99", "#0f1b1e") },
+        { light: P("#7d8a94", "#eef2f2", "#a2b0b4", "#c7cfd3"), dark: P("#263440", "#cfdcdc", "#8396a0", "#111a22") }
+      ]
+    },
+    crystal: {
+      name: "Crystal cave", shape: "shard", drips: 0.7, drop: 1.6,
+      blurb: "30% fewer drips, but each carries 60% more calcite. Everything grows as sharp crystals.",
+      nouns: ["Geode", "Vault", "Treasury", "Prism", "Gallery"],
+      palettes: [
+        { light: P("#7d7590", "#efe8ff", "#b6a6d8", "#d2cce0"), dark: P("#2b2638", "#d6c9f2", "#8f7fc0", "#15121f") },
+        { light: P("#8a7a5c", "#fff1c9", "#cfae62", "#ddd2bb"), dark: P("#30291c", "#f0d68a", "#b08f45", "#17130c") }
+      ]
+    },
+    ice: {
+      name: "Ice cave", shape: "icicle", milestone: 0.14,
+      blurb: "Every drip freezes. Each new formation gives +14% instead of +8%.",
+      nouns: ["Icehouse", "Frost Hall", "Glacier Cave", "Rime Chamber"],
+      palettes: [
+        { light: P("#8fa6b8", "#f4fbff", "#9fc6dd", "#d9e6ef"), dark: P("#23384a", "#dff1fb", "#7fb0cc", "#0f1c26") }
+      ]
+    },
+    lava: {
+      name: "Lava tube", shape: "lava", cost: 0.7,
+      blurb: "An old lava channel with dark, blobby drips. All upgrades cost 30% less.",
+      nouns: ["Tube", "Flow", "Furnace", "Ember Passage"],
+      palettes: [
+        { light: P("#5e5450", "#b9a9a0", "#a4502f", "#a99d97"), dark: P("#1e1a19", "#7a6a62", "#d0602f", "#0d0a0a") }
+      ]
+    }
+  };
+  const TYPE_IDS = Object.keys(CAVE_TYPES);
+  const typeOf = (id) => CAVE_TYPES[id] || CAVE_TYPES.limestone;
+  const ADJ = ["Whispering", "Amber", "Silent", "Weeping", "Lantern", "Fox", "Crooked", "Moonmilk", "Bear", "Owl", "Sleeping", "Copper", "Fern", "Echo", "Salt", "Hidden", "Old"];
 
   const caveCache = new Map();
-  function genCave(seed) {
-    if (caveCache.has(seed)) return caveCache.get(seed);
+  function genCave(seed, typeId) {
+    const key = seed + ":" + typeId;
+    if (caveCache.has(key)) return caveCache.get(key);
+    const type = typeOf(typeId);
     const r = rng(seed);
     const between = (a, b) => a + (b - a) * r();
     const pick = (arr) => arr[Math.floor(r() * arr.length)];
     const ceil = [], floor = [];
-    for (let i = 0; i <= 12; i++) ceil.push([i * 800 / 12, between(40, 80)]);
-    for (let i = 0; i <= 11; i++) floor.push([i * 800 / 11, between(336, 362)]);
+    for (let i = 0; i <= 12; i++) {
+      const x = i * 800 / 12;
+      let y = between(40, 80);
+      if (typeId === "lava") y = 78 - 34 * Math.sin(Math.PI * i / 12) + between(-5, 5);
+      if (typeId === "ice") y = between(34, 86);
+      ceil.push([x, y]);
+    }
+    for (let i = 0; i <= 11; i++) floor.push([i * 800 / 11, typeId === "lava" ? between(346, 356) : between(336, 362)]);
     const at = (pts, x) => { for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; return y0 + (y1 - y0) * (x - x0) / (x1 - x0); } return pts[pts.length - 1][1]; };
     const ceilAt = (x) => at(ceil, x), floorAt = (x) => at(floor, x);
 
@@ -233,8 +364,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     const mainMax = gap * between(0.42, 0.55);
     const stalactites = [{ x: mx, from: 5, span: 5.3, max: mainMax, w: between(22, 30) }];
     const xs = [mx];
-    const froms = [100, 160, 400, 2500, 2e4, 6e4, 3e5];
-    for (const from of froms) {
+    for (const from of [100, 160, 400, 2500, 2e4, 6e4, 3e5]) {
       let x, tries = 0;
       do { x = between(50, 750); tries++; } while (xs.some(v => Math.abs(v - x) < 48) && tries < 40);
       xs.push(x);
@@ -243,15 +373,14 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     const stalagmites = [{ x: mx, from: 1e3, span: 3, max: gap - mainMax - 4, w: between(40, 52) }];
     [3e3, 9e3, 2e5].forEach((from, i) => stalagmites.push({ x: stalactites[i + 1].x, from, span: 4, max: between(30, 75), w: between(22, 34) }));
 
-    const a = pick(ADJ); let n = pick(NOUN); if (n === a) n = "Cave";
+    const a = pick(ADJ); let n = pick(type.nouns); if (n === a) n = "Cave";
     const cave = {
-      seed, name: a + " " + n, palette: pick(PALETTES), ceil, floor, ceilAt, floorAt,
-      stalactites, stalagmites,
-      flowSide: r() < 0.5 ? "left" : "right",
-      curtainX: between(90, 620), poolX: between(90, 710),
-      rimX: between(120, 600), moonSeed: Math.floor(r() * 1e9), crystalSeed: Math.floor(r() * 1e9)
+      seed, typeId, type, name: a + " " + n, palette: pick(type.palettes), ceil, floor, ceilAt, floorAt,
+      stalactites, stalagmites, flowSide: r() < 0.5 ? "left" : "right",
+      curtainX: between(90, 620), poolX: between(90, 710), rimX: between(120, 600),
+      extraSeed: Math.floor(r() * 1e9), moonSeed: Math.floor(r() * 1e9), crystalSeed: Math.floor(r() * 1e9)
     };
-    caveCache.set(seed, cave);
+    caveCache.set(key, cave);
     return cave;
   }
   function smoothPath(pts, closeY) {
@@ -263,6 +392,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
     return d + `L800 ${closeY} Z`;
   }
+
 
   // ---------------- data ----------------
   const UPGRADES = [
@@ -284,7 +414,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     { at: 1e10, name: "Moonmilk",        text: "Soft white mineral paste coats the rock like frost." },
     { at: 1e11, name: "Crystal gallery", text: "The whole ceiling glitters." }
   ];
-  const MILESTONE_BONUS = 0.08, LEGACY_BONUS = 0.10;
+
+  const LEGACY_BONUS = 0.10;
   const NEW_CAVE_AT = 1e3; // need a stalagmite before moving on
 
   // Visitors you can unlock and send. "at" is all-time calcite, across every cave you've had.
@@ -304,8 +435,22 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   ];
   const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 
+
+  // Group project stages, in whole milligrams.
+  const PROJECT = [
+    { at: 1e5,  name: "Foundation stone" },
+    { at: 1e6,  name: "Pillar base" },
+    { at: 1e7,  name: "Rising pillar" },
+    { at: 1e8,  name: "Great Column" },
+    { at: 1e9,  name: "Cathedral hall" },
+    { at: 1e10, name: "Heart of the mountain" }
+  ];
+  const GROUP_ADJ = ["Quiet", "Copper", "Sleepy", "Muddy", "Lantern", "Moonlit", "Dripping", "Hidden", "Chalky", "Echoing"];
+  const GROUP_NOUN = ["Bats", "Moles", "Olms", "Cavers", "Foxes", "Glowworms", "Badgers", "Stalactites"];
+  const randomGroupName = () => "The " + GROUP_ADJ[Math.floor(Math.random() * GROUP_ADJ.length)] + " " + GROUP_NOUN[Math.floor(Math.random() * GROUP_NOUN.length)];
+
   const freshCave = (prev) => ({
-    seed: newSeed(), caveNo: (prev ? prev.caveNo : 0) + 1,
+    seed: newSeed(), caveType: "limestone", caveNo: (prev ? prev.caveNo : 0) + 1,
     calcite: 0, lifetime: 0,
     levels: { crack: 0, soil: 0, roots: 0, passage: 0 },
     reached: [], created: Date.now(), lastTick: Date.now(),
@@ -315,15 +460,19 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     unlocked: prev ? prev.unlocked : {},
     sent: prev ? prev.sent : {},
     seenGifts: prev ? prev.seenGifts : [],
-    epoch: prev ? prev.epoch : 0   // changes only when everything is erased
+    epoch: prev ? prev.epoch : 0,     // changes only when everything is erased
+    choices: null,                    // the caves on offer when moving on
+    public: prev ? prev.public : true // listed in the rankings
   });
 
   function normalise(s) {
     if (!s || typeof s !== "object") return null;
     const f = freshCave();
-    const past = Array.isArray(s.past) ? s.past.slice(-30) : [];
+    const past = Array.isArray(s.past) ? s.past.slice(-60) : [];
+    const choices = Array.isArray(s.choices) && s.choices.length ? s.choices.filter(c => c && Number.isFinite(c.seed) && CAVE_TYPES[c.type]).slice(0, 3) : null;
     return {
       seed: Number.isFinite(s.seed) ? s.seed >>> 0 : f.seed,
+      caveType: CAVE_TYPES[s.caveType] ? s.caveType : "limestone",
       caveNo: Number(s.caveNo) || 1,
       calcite: Number(s.calcite) || 0,
       lifetime: Number(s.lifetime) || 0,
@@ -337,19 +486,23 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       unlocked: (s.unlocked && typeof s.unlocked === "object") ? Object.assign({}, s.unlocked) : {},
       sent: (s.sent && typeof s.sent === "object") ? Object.assign({}, s.sent) : {},
       seenGifts: Array.isArray(s.seenGifts) ? s.seenGifts.slice(-300) : [],
-      epoch: Number(s.epoch) || 0
+      epoch: Number(s.epoch) || 0,
+      choices: choices && choices.length ? choices : null,
+      public: s.public !== false
     };
   }
   function loadLocal() { try { const raw = localStorage.getItem(KEY); return raw ? normalise(JSON.parse(raw)) : null; } catch { return null; } }
   function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
 
   let state = loadLocal() || freshCave();
-  let myGifts = [];         // gifts addressed to me, for the current cave
-  let myId = null, db = null, userCap = null, canWrite = false;
-  let visiting = null;      // { id, cave doc data, gifts }
+  let myGifts = [];         // visitors sent to me in the current group
+  let project = null;       // the group's project document
+  let myId = null, db = null, canWrite = false;
+  let visiting = null;
 
   // ---------------- economy ----------------
-  const cost = (u) => u.base * Math.pow(u.mult, state.levels[u.id]);
+  const T = () => typeOf(state.caveType);
+  const cost = (u) => u.base * Math.pow(u.mult, state.levels[u.id]) * (T().cost || 1);
   const allTime = () => state.pastTotal + state.lifetime;
   const isActive = (g, now) => { const k = KIND[g.kind]; return !k.active || now - g.sentAt >= k.active; };
   function giftBonus(now) {
@@ -363,9 +516,12 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
     return { drips, drop };
   }
-  const legacyMult = () => 1 + LEGACY_BONUS * state.legacy;
-  const dripsPerMin = (now = Date.now()) => (4 + 2 * state.levels.crack) * Math.pow(1.25, state.levels.roots) * Math.pow(2, state.levels.passage) * giftBonus(now).drips;
-  const mgPerDrop = (now = Date.now()) => 0.05 * Math.pow(1.3, state.levels.soil) * Math.pow(1 + MILESTONE_BONUS, state.reached.length) * legacyMult() * giftBonus(now).drop;
+  const milestoneBonus = () => T().milestone || 0.08;
+  const legacyMult = () => 1 + LEGACY_BONUS * state.legacy * (T().legacy || 1);
+  const projectStage = () => project ? PROJECT.filter(p => (project.total || 0) >= p.at).length : 0;
+  const projectMult = () => 1 + 0.1 * projectStage();
+  const dripsPerMin = (now = Date.now()) => (4 + 2 * state.levels.crack) * Math.pow(1.25, state.levels.roots) * Math.pow(2, state.levels.passage) * (T().drips || 1) * giftBonus(now).drips;
+  const mgPerDrop = (now = Date.now()) => 0.05 * Math.pow(1.3, state.levels.soil) * Math.pow(1 + milestoneBonus(), state.reached.length) * legacyMult() * (T().drop || 1) * projectMult() * giftBonus(now).drop;
   const baseRate = () => dripsPerMin() / 60 * mgPerDrop(); // mg/s before weather
 
   const AMP = 0.25;
@@ -398,22 +554,28 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     if (!isFinite(sec)) return "a very long time";
     if (sec < 60) return Math.max(1, Math.ceil(sec)) + " s";
     if (sec < 3600) return Math.ceil(sec / 60) + " min";
-    if (sec < 86400) { const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60); return h + " h" + (m ? " " + m + " min" : ""); }
-    const d = Math.floor(sec / 86400), h = Math.round(sec % 86400 / 3600);
+    if (sec < 86400) { const t = Math.round(sec / 60), h = Math.floor(t / 60), m = t % 60; return h + " h" + (m ? " " + m + " min" : ""); }
+    const t = Math.round(sec / 3600), d = Math.floor(t / 24), h = t % 24;
     return d + (d === 1 ? " day" : " days") + (h ? " " + h + " h" : "");
   }
   const dateStr = (t) => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
+
+  const ago = (t) => duration(Math.max(1, (Date.now() - t) / 1000)) + " ago";
+  const dayStr = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
   // ---------------- names ----------------
   const nicks = {};
-  const nameOf = (id) => id === myId ? "you" : (nicks[id] || "Someone");
-  const resolveNames = async () => {};
+  const nameOf = (id, fallback) => id === myId ? "you" : (nicks[id] || fallback || "Someone");
 
-  // ---------------- UI ----------------
+  // ---------------- UI helpers ----------------
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const news = (text) => { const li = el("li", null, text); $("news").prepend(li); while ($("news").children.length > 4) $("news").lastChild.remove(); };
+  const news = (text) => { const ul = $("news"); if (!ul) return; const li = el("li", null, text); ul.prepend(li); while (ul.children.length > 4) ul.lastChild.remove(); };
+  // True while someone is typing or choosing inside that box, so a re-render doesn't wipe it.
+  const focusInside = (id) => { const a = document.activeElement; return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && $(id) && $(id).contains(a)); };
 
+  // ---------------- upgrades ----------------
   const upEls = {};
   function buildUpgrades() {
     for (const u of UPGRADES) {
@@ -443,6 +605,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     $("drips").textContent = Math.round(dripsPerMin() * w) + " drips a minute, " + mass(mgPerDrop(now)) + " each";
     $("season").textContent = w > 1.08 ? "Rain overhead" : w < 0.92 ? "Dry spell" : "Steady seep";
     $("seasonNote").textContent = "Water flow at " + Math.round(w * 100) + "% of average";
+    $("upSub").textContent = "Spend calcite to send more water, or richer water, into the cave." + (T().cost ? " Upgrades here cost 30% less." : "");
+    $("journalSub").textContent = "Each new formation makes this cave deposit " + Math.round(milestoneBonus() * 100) + "% more.";
 
     for (const u of UPGRADES) {
       const e = upEls[u.id], c = cost(u), lvl = state.levels[u.id];
@@ -460,10 +624,11 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
 
   let minuteKey = "";
   function renderMinute(force) {
-    const key = [Math.floor(Date.now() / 60000), state.reached.length, state.caveNo, myGifts.length, Object.keys(nicks).length, othersKey, canWrite, Object.keys(state.unlocked).length].join("|");
+    const key = Math.floor(Date.now() / 60000) + "|" + state.reached.length + "|" + state.caveNo;
     if (!force && key === minuteKey) return;
     minuteKey = key;
-    renderJournal(); renderMove(); renderCollection(); renderVisitors(); renderOthers(); renderPast();
+    renderJournal(); renderMove(); renderCollection(); renderVisitors();
+    renderGroup(); renderProject(); renderRankings(); renderAtlas();
   }
 
   function renderJournal() {
@@ -480,34 +645,80 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
   }
 
+  // ---------------- moving on ----------------
+  function rollChoices() {
+    const types = TYPE_IDS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    return types.map(type => ({ seed: newSeed(), type }));
+  }
+  let moveKey = "";
   function renderMove() {
+    const eligible = state.lifetime >= NEW_CAVE_AT;
+    if (eligible && !state.choices) { state.choices = rollChoices(); saveLocal(); }
+    const key = eligible ? "y" + JSON.stringify(state.choices) + state.legacy + state.reached.length + isDark() : "n" + Math.floor(Date.now() / 60000);
+    if (key === moveKey) return;
+    moveKey = key;
     const box = $("move"); box.textContent = "";
-    const gain = state.reached.length;
-    if (state.lifetime < NEW_CAVE_AT) {
-      box.append(el("p", null, "Once a stalagmite rises in this cave you can leave it and go looking for another. Every new cave has its own shape, stone colour and name."));
+    if (!eligible) {
+      box.append(el("p", null, "Once a stalagmite rises in this cave you can leave it and go looking for another. You'll get three caves to choose from, each a different kind with its own look and strengths."));
       box.append(el("p", "empty", "Possible in about " + duration((NEW_CAVE_AT - state.lifetime) / baseRate()) + "."));
       return;
     }
-    const now = Math.round(state.legacy * LEGACY_BONUS * 100), after = Math.round((state.legacy + gain) * LEGACY_BONUS * 100);
-    box.append(el("p", null, "Leave " + genCave(state.seed).name + " as it is and find a new, empty cave. Your calcite and upgrades stay behind. Your visitors and unlocks come along, and so does what you learned: every formation you grew makes all future caves deposit 10% faster."));
-    box.append(el("p", "empty", "Experience bonus now: +" + now + "%. After leaving: +" + after + "%."));
-    const b = el("button", "main", "Find a new cave"); b.type = "button";
-    b.addEventListener("click", newCave);
-    box.appendChild(b);
+    const nowB = Math.round(state.legacy * LEGACY_BONUS * 100), after = Math.round((state.legacy + state.reached.length) * LEGACY_BONUS * 100);
+    box.append(el("p", null, "Leave " + genCave(state.seed, state.caveType).name + " as it is and explore a new, empty cave. Calcite and upgrades stay behind. Visitors, unlocks and experience come with you: every formation you grew makes future caves 10% faster."));
+    box.append(el("p", "empty", "Experience bonus now: +" + nowB + "%. After leaving: +" + after + "%. These three caves are waiting:"));
+    const cards = el("div", "cards");
+    for (const c of state.choices) {
+      const cave = genCave(c.seed, c.type);
+      const card = el("div", "card");
+      card.appendChild(caveThumb(c.seed, c.type, 3e4));
+      const body = el("div", "body");
+      body.append(el("div", "t", cave.name), el("div", "m", cave.type.name), el("div", "m", cave.type.blurb));
+      const b = el("button", "main", "Explore this cave"); b.type = "button";
+      b.addEventListener("click", () => newCave(c));
+      body.appendChild(b);
+      card.appendChild(body);
+      cards.appendChild(card);
+    }
+    box.appendChild(cards);
   }
-  function newCave() {
-    const cave = genCave(state.seed);
-    if (!confirm("Leave " + cave.name + " and look for a new cave?")) return;
+  function newCave(choice) {
+    const cave = genCave(state.seed, state.caveType), next = genCave(choice.seed, choice.type);
+    if (!confirm("Leave " + cave.name + " and explore " + next.name + "?")) return;
     advance(Date.now());
     const prev = state;
     const legacy = prev.legacy + prev.reached.length;
-    const past = prev.past.concat([{ name: cave.name, seed: prev.seed, lifetime: prev.lifetime, ended: Date.now() }]).slice(-30);
+    const past = prev.past.concat([{ name: cave.name, seed: prev.seed, type: prev.caveType, lifetime: prev.lifetime, reached: prev.reached.length, started: prev.created, ended: Date.now() }]).slice(-60);
     state = freshCave(Object.assign({}, prev, { legacy, past, pastTotal: prev.pastTotal + prev.lifetime }));
-    lastSceneKey = ""; lastVisKey = "";
-    news("You found " + genCave(state.seed).name + ". The first drops are already falling.");
+    state.seed = choice.seed; state.caveType = choice.type;
+    lastSceneKey = ""; lastVisKey = ""; moveKey = ""; atlasKey = "";
+    news("You found " + next.name + ", a " + next.type.name.toLowerCase() + ". The first drops are already falling.");
     saveLocal(); pushCloud(true); render(true);
   }
 
+  // ---------------- atlas ----------------
+  let atlasKey = "";
+  function renderAtlas() {
+    const key = state.past.length + ":" + isDark() + ":" + (state.past.length ? state.past[state.past.length - 1].ended : 0);
+    if (key === atlasKey) return;
+    atlasKey = key;
+    $("atlasBox").hidden = !state.past.length;
+    const box = $("atlas"); box.textContent = "";
+    for (const p of state.past.slice().reverse()) {
+      const type = CAVE_TYPES[p.type] ? p.type : "limestone";
+      const reached = Number.isFinite(p.reached) ? p.reached : MILESTONES.filter(m => p.lifetime >= m.at).length;
+      const card = el("div", "card");
+      card.appendChild(caveThumb(p.seed >>> 0, type, p.lifetime));
+      const body = el("div", "body");
+      const last = reached ? MILESTONES[reached - 1].name : "Bare rock";
+      body.append(el("div", "t", p.name), el("div", "m", typeOf(type).name),
+        el("div", "m", mass(p.lifetime) + " deposited, " + reached + (reached === 1 ? " formation" : " formations") + " (last: " + last + ")"),
+        el("div", "m", (p.started ? dayStr(p.started) + " to " : "Left ") + dayStr(p.ended)));
+      card.appendChild(body);
+      box.appendChild(card);
+    }
+  }
+
+  // ---------------- collection & visitors ----------------
   function effText(k) {
     const e = k.eff, p = (v) => "+" + Math.round(v * 100) + "%";
     const what = e.drips ? p(e.drips) + " drips" : e.drop ? p(e.drop) + " calcite per drop" : p(e.both) + " drips and calcite per drop";
@@ -522,7 +733,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   }
   function renderVisitors() {
     const ul = $("visitors"); ul.textContent = "";
-    if (!myGifts.length) { ul.appendChild(el("li", "empty", db ? "No visitors yet. Ask someone in your group to send one." : "Visitors arrive from other people's caves once you join a group.")); return; }
+    if (!myGifts.length) { ul.appendChild(el("li", "empty", db && group ? "No visitors yet. Ask someone in your group to send one." : "Visitors arrive from other people's caves once you're in a group.")); return; }
     const now = Date.now();
     for (const k of KINDS) {
       const gs = myGifts.filter(g => g.kind === k.id).sort((a, b) => b.sentAt - a.sentAt);
@@ -530,10 +741,15 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       const act = Math.min(k.cap, gs.filter(g => isActive(g, now)).length);
       const li = el("li");
       li.append(el("div", "who", gs.length + " " + (gs.length === 1 ? k.name.toLowerCase() : k.plural)));
-      const senders = [...new Set(gs.map(g => nameOf(g.from)))].join(", ");
+      const senders = [...new Set(gs.map(g => nameOf(g.from, g.fromNick)))].join(", ");
       const e = k.eff, per = e.drips || e.drop || e.both;
       li.append(el("div", "meta", "From " + senders + ". Newest: " + giftStatus(gs[0], now) + "."));
       li.append(el("div", "meta", act ? "Giving +" + Math.round(per * act * 100) + "% " + (e.drips ? "drips" : e.drop ? "calcite per drop" : "to both") + (gs.length > k.cap ? " (only " + k.cap + " count)" : "") + "." : "No bonus yet."));
+      for (const g of gs.filter(x => x.note).slice(0, 3)) {
+        const m = el("div", "meta");
+        m.append(el("span", "note-q", "\u201c" + g.note + "\u201d"), " from " + nameOf(g.from, g.fromNick) + ", " + dayStr(g.sentAt));
+        li.appendChild(m);
+      }
       ul.appendChild(li);
     }
   }
@@ -545,10 +761,9 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     for (const k of KINDS) {
       const li = el("li");
       if (state.unlocked[k.id]) {
-        li.append(el("div", "who", k.name), el("div", "meta", k.desc), el("div", "meta", effText(k) + ". Can be sent every " + duration(k.cd / 1000) + "."));
+        li.append(el("div", "who", k.name), el("div", "meta", k.desc), el("div", "meta", effText(k) + ". Can be sent to the same person every " + duration(k.cd / 1000) + "."));
       } else if (!shownNext) {
-        shownNext = true;
-        li.className = "locked";
+        shownNext = true; li.className = "locked";
         li.append(el("div", "who", "Next: " + k.name), el("div", "meta", k.desc), el("div", "meta", "Unlocks at " + mass(k.at) + " all-time, about " + duration((k.at - all) / rate) + " at the current rate."));
       } else {
         li.className = "locked";
@@ -558,44 +773,88 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
   }
 
-  let others = [], othersKey = "";
-  const pickFor = {};
+  // ---------------- group ----------------
+  let others = [];
+  const pickFor = {}, noteFor = {};
+  let groupState = "none", groupData = null, groupOwner = null, banned = [];
+  const isOnline = (t) => t && Date.now() - t < ONLINE_WINDOW;
+
+  function renderGroup() {
+    const signedIn = !!authUser;
+    $("join").hidden = !(configured && signedIn && db && !group);
+    $("ownerBox").hidden = !(group && groupOwner === myId && groupState === "ready");
+    renderGroupInfo();
+    renderOwner();
+    if (!focusInside("others")) renderOthers();
+  }
+
+  function renderGroupInfo() {
+    const box = $("groupInfo"); box.textContent = "";
+    if (configured === null || (configured && !authReady)) { box.appendChild(el("p", "empty", "Checking for online play...")); return; }
+    if (!configured) { box.appendChild(el("p", "empty", "Online play isn't set up on this copy of the page yet, so the cave grows just for you. The README explains how to connect it.")); return; }
+    if (!authUser) {
+      box.appendChild(el("p", "empty", "Sign in with Google to join a group, send visitors, see the rankings and keep your cave on every device. Without signing in, your cave still grows here in this browser."));
+      if (connectError) box.appendChild(el("p", "empty", connectError));
+      if (auth) { const b = el("button", "ghost", "Sign in with Google"); b.type = "button"; b.addEventListener("click", signInGoogle); const a = el("div", "acts"); a.appendChild(b); box.appendChild(a); }
+      return;
+    }
+    if (connectError) box.appendChild(el("p", "empty", connectError));
+    if (!group) {
+      box.appendChild(el("p", "empty", "Signed in as " + (authUser.email || authUser.displayName || "a Google account") + ". If you're in a group on another device, it appears here automatically."));
+      const out = el("button", "link", "Sign out"); out.type = "button"; out.addEventListener("click", signOutClick);
+      box.appendChild(out);
+      return;
+    }
+    if (groupState !== "ready") { box.appendChild(el("p", "empty", "Opening the group...")); return; }
+    const info = el("div", "groupinfo");
+    info.append(el("div", "gname", (groupData && groupData.name) || "Your group"));
+    const online = others.filter(o => isOnline(o.updated)).length;
+    const p1 = el("p", null, (others.length + 1) + (others.length ? " players" : " player, so far just you") + (online ? ", " + online + " playing right now" : "") + ".");
+    const p2 = el("p", null, "Group code: " + group + ". Share it" + (groupData && groupData.hasPw ? " together with the password" : "") + " with people you want to invite. " + (groupOwner === myId ? "You own this group." : "Owner: " + nameOf(groupOwner) + "."));
+    const p3 = el("p", null, "You play as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + ". ");
+    const leave = el("button", "link", "Leave group"); leave.type = "button";
+    leave.addEventListener("click", () => { if (confirm("Leave this group? Your cave stays with your account. Visitors sent to you in this group stay here in case you come back.")) leaveGroup(); });
+    const out = el("button", "link", "Sign out"); out.type = "button"; out.addEventListener("click", signOutClick);
+    p3.append(leave, " ", out);
+    info.append(p1, p2, p3);
+    box.appendChild(info);
+  }
+
+  function renderOwner() {
+    if ($("ownerBox").hidden || !groupData) return;
+    if (!focusInside("ownerBox") && $("renameInput").value === "") $("renameInput").value = groupData.name || "";
+    const ra = groupData.renamedAt && groupData.renamedAt.toMillis ? groupData.renamedAt.toMillis() : 0;
+    const next = ra + 7 * DAY;
+    if (ra && next > Date.now()) {
+      $("renameNote").textContent = "Renamed " + dayStr(ra) + ". The name can change once a week, next on " + dateStr(next) + ".";
+      $("renameBtn").disabled = true;
+    } else {
+      $("renameNote").textContent = "The name can be changed once a week.";
+      $("renameBtn").disabled = false;
+    }
+  }
+
   function renderOthers() {
     const ul = $("others"); ul.textContent = "";
-    $("join").hidden = !(configured && authUser && !group);
-    if (configured === null || (configured && !authReady)) { ul.appendChild(el("li", "empty", "Checking for online play...")); return; }
-    if (!configured) { ul.appendChild(el("li", "empty", "Online play isn't set up on this copy of the page yet, so the cave grows just for you. The README explains how to connect it.")); return; }
-    if (!authUser) {
-      const li = el("li");
-      li.append(el("div", "meta", "Sign in with Google to join a group, send visitors and keep your cave on every device. Without signing in, your cave still grows here in this browser."));
-      if (connectError) li.append(el("div", "meta", connectError));
-      if (auth) {
-        const b = el("button", "ghost", "Sign in with Google"); b.type = "button";
-        b.addEventListener("click", signInGoogle);
-        const acts = el("div", "acts"); acts.appendChild(b); li.appendChild(acts);
-      }
-      ul.appendChild(li);
-      return;
-    }
-    if (!group) {
-      // Show problems even before a group is joined; otherwise a failed load looks like "no group".
-      if (connectError) ul.appendChild(el("li", "empty", connectError));
-      ul.appendChild(el("li", "empty", "Signed in as " + (authUser.email || authUser.displayName || "a Google account") + ". If you've joined a group on another device, it appears here automatically. You can also type the same code."));
-      return;
-    }
-    if (!db || !myId) { ul.appendChild(el("li", "empty", connectError || "Connecting to your group...")); return; }
+    if (!group || groupState !== "ready") return;
     const now = Date.now();
-    if (!others.length) ul.appendChild(el("li", "empty", "Nobody else is in this group yet. Send someone the link and the group code."));
+    if (!others.length) ul.appendChild(el("li", "empty", "Nobody else is here yet. Send someone the group code" + (groupData && groupData.hasPw ? " and the password" : "") + "."));
     for (const o of others) {
       const li = el("li");
-      li.append(el("div", "who", nameOf(o.id) + "'s " + (o.name || "cave")));
-      li.append(el("div", "meta", mass(o.lifetime || 0) + " in this cave, " + mass(o.allTime || o.lifetime || 0) + " all-time" + (o.updated ? ", last seen " + dateStr(o.updated) : "")));
+      const who = el("div", "who");
+      if (isOnline(o.updated)) who.appendChild(el("span", "dot"));
+      who.append(nameOf(o.id) + "'s " + (o.name || "cave"));
+      if (o.id === groupOwner) who.appendChild(el("span", "lvl", "owner"));
+      li.append(who);
+      li.append(el("div", "meta", typeOf(o.type).name + ". " + mass(o.lifetime || 0) + " in this cave, " + mass(o.allTime || o.lifetime || 0) + " all-time. " + (isOnline(o.updated) ? "Playing right now." : o.updated ? "Last seen " + ago(o.updated) + "." : "")));
       const acts = el("div", "acts");
       const look = el("button", "ghost", "Look inside"); look.type = "button";
       look.addEventListener("click", () => visit(o));
       acts.appendChild(look);
+      li.appendChild(acts);
       const kinds = KINDS.filter(k => state.unlocked[k.id]);
       if (kinds.length) {
+        const send = el("div", "acts");
         const sel = el("select"); sel.setAttribute("aria-label", "Visitor to send to " + nameOf(o.id));
         for (const k of kinds) {
           const wait = (state.sent[o.id + ":" + k.id] || 0) + k.cd - now;
@@ -606,25 +865,28 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
         const firstReady = kinds.find(k => (state.sent[o.id + ":" + k.id] || 0) + k.cd <= now);
         const prevOpt = pickFor[o.id] ? [...sel.options].find(op => op.value === pickFor[o.id]) : null;
         sel.value = (prevOpt && !prevOpt.disabled) ? prevOpt.value : (firstReady ? firstReady.id : kinds[0].id);
+        const note = el("input", "note"); note.maxLength = 80; note.placeholder = "Add a note (optional)"; note.value = noteFor[o.id] || "";
+        note.setAttribute("aria-label", "Note for " + nameOf(o.id));
+        note.addEventListener("input", () => { noteFor[o.id] = note.value; });
         const b = el("button", "ghost", "Send"); b.type = "button";
         const sync = () => { pickFor[o.id] = sel.value; b.disabled = (state.sent[o.id + ":" + sel.value] || 0) + KIND[sel.value].cd > Date.now(); };
         sel.addEventListener("change", sync); sync();
-        b.addEventListener("click", () => sendGift(o, sel.value));
-        acts.append(sel, b);
-      } else acts.appendChild(el("span", "meta", "Your first visitor unlocks at " + mass(KINDS[0].at) + " all-time."));
+        b.addEventListener("click", () => sendGift(o, sel.value, note.value.trim()));
+        send.append(sel, note, b);
+        li.appendChild(send);
+      } else li.appendChild(el("div", "meta", "Your first visitor to send unlocks at " + mass(KINDS[0].at) + " all-time."));
       if (groupOwner === myId) {
         const kick = el("button", "link", "Remove from group"); kick.type = "button";
         kick.addEventListener("click", () => removePlayer(o));
-        acts.appendChild(kick);
+        const k2 = el("div", "acts"); k2.appendChild(kick); li.appendChild(k2);
       }
-      li.appendChild(acts);
       ul.appendChild(li);
     }
     if (groupOwner === myId && banned.length) {
       const li = el("li");
       li.append(el("div", "who", "Removed players"));
       for (const b of banned) {
-        const row = el("div", "meta", (b.nick || "Someone") + ", removed " + dateStr(b.at || 0) + ". ");
+        const row = el("div", "meta", (b.nick || "Someone") + ", removed " + dayStr(b.at || 0) + ". ");
         const back = el("button", "link", "Let back in"); back.type = "button";
         back.addEventListener("click", () => allowBack(b));
         row.appendChild(back);
@@ -632,24 +894,122 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       }
       ul.appendChild(li);
     }
-    const ownerText = !groupOwner ? "" : groupOwner === myId ? " You created this group, so you can remove players." : " Created by " + nameOf(groupOwner) + ".";
-    const me = el("li", "empty", "You're in group \u201c" + group + "\u201d as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + "." + ownerText + " ");
-    const leave = el("button", "link", "Leave group"); leave.type = "button";
-    leave.addEventListener("click", () => { if (confirm("Leave this group? Your cave stays with your account.")) leaveGroup(); });
-    const out = el("button", "link", "Sign out"); out.type = "button";
-    out.addEventListener("click", () => { if (confirm("Sign out? Your cave stays saved to your Google account.")) Auth.signOut(auth); });
-    me.append(leave, " ", out);
-    ul.appendChild(me);
   }
-  function renderPast() {
-    $("pastWrap").hidden = !state.past.length;
-    const ul = $("past"); ul.textContent = "";
-    for (const p of state.past.slice().reverse()) {
+
+  // ---------------- group project ----------------
+  function renderProject() {
+    const show = !!(group && groupState === "ready");
+    $("projectBox").hidden = !show;
+    if (!show) return;
+    const total = project ? project.total || 0 : 0;
+    const done = projectStage();
+    const next = PROJECT[done];
+    const status = (done ? "Finished: " + PROJECT[done - 1].name + " (" + done + " of " + PROJECT.length + "). " : "Nothing built yet. ") +
+      (next ? "Next: " + next.name + " at " + mass(next.at) + ", " + mass(next.at - total) + " to go. " : "The column is complete. ") +
+      "Bonus for everyone: +" + (done * 10) + "% calcite per drop.";
+    $("projectStatus").textContent = mass(total) + " given so far. " + status;
+    drawProject(total);
+    const ul = $("projectContrib"); ul.textContent = "";
+    const contrib = project && project.contrib ? Object.entries(project.contrib).sort((a, b) => b[1] - a[1]) : [];
+    if (!contrib.length) ul.appendChild(el("li", "empty", "Nobody has given anything yet."));
+    for (const [uid, amt] of contrib) {
       const li = el("li");
-      li.append(el("div", "who", p.name), el("div", "meta", mass(p.lifetime) + " deposited, left " + dateStr(p.ended)));
+      li.append(el("div", "who", uid === myId ? "You" : nameOf(uid)), el("div", "meta", mass(amt) + ", " + (total ? Math.round(amt / total * 100) : 0) + "% of the column"));
       ul.appendChild(li);
     }
+    for (const b of $("giveActs").querySelectorAll("button")) b.disabled = Math.floor(state.calcite * Number(b.dataset.frac)) < 1;
   }
+  function drawProject(total) {
+    const svg = $("projectSvg"); svg.textContent = "";
+    const cave = genCave(state.seed, state.caveType);
+    applyPalette(cave, svg);
+    svgEl(svg, "rect", { x: 0, y: 0, width: 800, height: 240, fill: "var(--cave)" });
+    svgEl(svg, "path", { d: "M0 0 H800 V28 C640 44 520 24 400 34 C280 44 160 22 0 40 Z", fill: "var(--rock)" });
+    svgEl(svg, "path", { d: "M0 240 H800 V214 C640 204 520 220 400 212 C280 206 160 222 0 210 Z", fill: "var(--rock)" });
+    const f = Math.min(1, Math.log10(total + 1) / 10);
+    const top = 32, bottom = 213, mid = (top + bottom) / 2;
+    const w = 14 + 120 * f;
+    const lenT = (mid - top) * f, lenB = (bottom - mid) * f;
+    if (total > 0) {
+      svgPath(svg, `M${400 - w / 2} ${top} C${400 - w / 3} ${top + lenT * 0.6} ${400 - 3} ${top + lenT} ${400} ${top + lenT + 2} C${400 + 3} ${top + lenT} ${400 + w / 3} ${top + lenT * 0.6} ${400 + w / 2} ${top} Z`, "var(--stone)", 1);
+      svgPath(svg, `M${400 - w * 0.65} ${bottom + 2} C${400 - w / 2} ${bottom - lenB * 0.5} ${400 - 4} ${bottom - lenB} ${400} ${bottom - lenB - 2} C${400 + 4} ${bottom - lenB} ${400 + w / 2} ${bottom - lenB * 0.5} ${400 + w * 0.65} ${bottom + 2} Z`, "var(--stone)", 1);
+    }
+    // a person for scale
+    const px = 470 + w / 2, py = 212;
+    line(svg, `M${px} ${py - 9} L${px - 2} ${py} M${px} ${py - 9} L${px + 2} ${py} M${px} ${py - 9} L${px} ${py - 15}`, "var(--caver)", 1.4);
+    svgEl(svg, "circle", { cx: px, cy: py - 17, r: 2, fill: "var(--caver)" });
+    svgEl(svg, "path", { d: `M${px - 2.2} ${py - 17.6} A2.4 2.4 0 0 1 ${px + 2.4} ${py - 17.6} Z`, fill: "var(--helmet)" });
+  }
+  async function contribute(frac) {
+    if (!db || !group || groupState !== "ready") return;
+    advance(Date.now());
+    const amount = Math.floor(state.calcite * frac);
+    if (amount < 1) { news("You need at least 1 mg of calcite to give."); return; }
+    state.calcite -= amount; saveLocal(); render(true);
+    const ref = F.doc(db, base() + "/project/main");
+    try {
+      if (!project) { try { await F.setDoc(ref, { total: 0, contrib: {}, created: Date.now() }); } catch {} }
+      await F.updateDoc(ref, { total: F.increment(amount), ["contrib." + myId]: F.increment(amount) });
+      news("You gave " + mass(amount) + " of calcite to the column.");
+    } catch (e) {
+      state.calcite += amount; saveLocal(); render(true);
+      news("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
+    }
+  }
+  $("giveActs").addEventListener("click", (e) => { const b = e.target.closest("button[data-frac]"); if (b) contribute(Number(b.dataset.frac)); });
+
+  // ---------------- rankings ----------------
+  let rank = { top: [], now: [], at: 0, error: "" }, rankTab = "players";
+  function renderRankings() {
+    const ul = $("rankList"); ul.textContent = "";
+    const ready = !!(db && authUser);
+    $("rankTabs").hidden = !ready; $("publicWrap").hidden = !ready;
+    if (!configured) { $("rankSub").textContent = "Rankings need online play, which isn't set up on this copy of the page."; return; }
+    if (!ready) { $("rankSub").textContent = "Sign in with Google to see everyone who plays, ranked by all-time calcite."; return; }
+    $("publicToggle").checked = state.public !== false;
+    $("rankSub").textContent = rank.now.length ? rank.now.length + (rank.now.length === 1 ? " person is" : " people are") + " playing right now." : "Everyone who plays, ranked by all-time calcite.";
+    for (const b of $("rankTabs").querySelectorAll("[data-tab]")) b.setAttribute("aria-pressed", String(b.dataset.tab === rankTab));
+    if (rank.error) { ul.appendChild(el("li", "empty", "Couldn't load the rankings (" + rank.error + ").")); return; }
+    if (!rank.at) { ul.appendChild(el("li", "empty", "Loading...")); return; }
+    const row = (pos, name, sub, val, me) => {
+      const li = el("li"); if (me) li.className = "me";
+      const nm = el("span", "nm", name); if (sub) nm.appendChild(el("span", "sub2", sub));
+      li.append(el("span", "pos", pos), nm, el("span", "val", val));
+      ul.appendChild(li);
+    };
+    if (rankTab === "players") {
+      rank.top.slice(0, 25).forEach((p, i) => row(i + 1 + ".", (isOnline(p.updated) ? "\u25CF " : "") + (p.id === myId ? "You" : p.nick || "Someone"), (p.caveName || "") + (p.groupName ? ", " + p.groupName : ""), mass(p.allTime || 0), p.id === myId));
+      const mine = rank.top.findIndex(p => p.id === myId);
+      if (mine >= 25) row(mine + 1 + ".", "You", "", mass(allTime()), true);
+      else if (mine < 0) ul.appendChild(el("li", "empty", state.public === false ? "You're hidden from the rankings." : "You're not in the top " + rank.top.length + " yet."));
+    } else if (rankTab === "groups") {
+      const groups = new Map();
+      for (const p of rank.top) {
+        if (!p.groupPub) continue;
+        const g = groups.get(p.groupPub) || { name: p.groupName || "A group", total: 0, members: 0, project: 0, mine: false };
+        g.total += p.allTime || 0; g.members++; g.project = Math.max(g.project, p.projectTotal || 0);
+        if (p.id === myId) g.mine = true;
+        groups.set(p.groupPub, g);
+      }
+      const list = [...groups.values()].sort((a, b) => b.total - a.total).slice(0, 20);
+      if (!list.length) ul.appendChild(el("li", "empty", "No groups in the rankings yet."));
+      list.forEach((g, i) => row(i + 1 + ".", g.name, g.members + (g.members === 1 ? " player" : " players") + (g.project ? ", column " + mass(g.project) : ""), mass(g.total), g.mine));
+    } else {
+      if (!rank.now.length) ul.appendChild(el("li", "empty", "Nobody else is playing right now."));
+      rank.now.forEach((p, i) => row("\u25CF", p.id === myId ? "You" : p.nick || "Someone", (p.caveName || "") + (p.groupName ? ", " + p.groupName : ""), mass(p.allTime || 0), p.id === myId));
+    }
+  }
+  $("rankTabs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tab]");
+    if (b) { rankTab = b.dataset.tab; renderRankings(); }
+  });
+  $("rankRefresh").addEventListener("click", () => loadRankings(true));
+  $("publicToggle").addEventListener("change", async (e) => {
+    state.public = e.target.checked; saveLocal();
+    if (!state.public && db && myId) { try { await F.deleteDoc(F.doc(db, "players/" + myId)); } catch {} }
+    else pushCloud(true);
+    loadRankings(true);
+  });
 
   // ---------------- scene ----------------
   const NS = "http://www.w3.org/2000/svg";
@@ -658,10 +1018,10 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     if (t === "dark") return true; if (t === "light") return false;
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   };
-  function applyPalette(cave) {
-    const p = isDark() ? cave.palette.dark : cave.palette.light, box = $("caveBox");
-    box.style.setProperty("--rock", p.rock); box.style.setProperty("--stone", p.stone);
-    box.style.setProperty("--stone-edge", p.edge); box.style.setProperty("--cave", p.cave);
+  function applyPalette(cave, node) {
+    const p = isDark() ? cave.palette.dark : cave.palette.light;
+    node.style.setProperty("--rock", p.rock); node.style.setProperty("--stone", p.stone);
+    node.style.setProperty("--stone-edge", p.edge); node.style.setProperty("--cave", p.cave);
   }
   function svgPath(g, d, fill, op, stroke) {
     const p = document.createElementNS(NS, "path");
@@ -672,40 +1032,55 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   }
   function svgEl(g, tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); g.appendChild(e); return e; }
 
-  function currentView() {
-    const homeOf = (unlocked, seed) => Object.keys(unlocked || {}).filter(k => KIND[k]).map(k => ({ id: "home-" + k + "-" + seed, kind: k, from: null, sentAt: unlocked[k] }));
-    if (visiting) { const s = visiting.seed; return { cave: genCave(s), lifetime: visiting.lifetime || 0, gifts: (visiting.gifts || []).concat(homeOf(visiting.home, s)), dpm: visiting.dpm || 4, owner: visiting.id }; }
-    return { cave: genCave(state.seed), lifetime: state.lifetime, gifts: myGifts.concat(homeOf(state.unlocked, state.seed)), dpm: dripsPerMin(), owner: myId };
+  function stalactitePath(shape, x, top, len, w) {
+    if (shape === "shard") return `M${x - w / 2} ${top} L${x - w * 0.12} ${top + len} L${x + w * 0.14} ${top + len * 0.9} L${x + w / 2} ${top} Z`;
+    if (shape === "icicle") { const v = w * 0.7; return `M${x - v / 2} ${top} L${x - v * 0.08} ${top + len * 0.9} L${x} ${top + len} L${x + v * 0.08} ${top + len * 0.9} L${x + v / 2} ${top} Z`; }
+    if (shape === "lava") { const b = Math.max(2, w * 0.28); return `M${x - w / 2} ${top} C${x - w / 2} ${top + len * 0.4} ${x - b} ${top + len * 0.6} ${x - b} ${top + len - b} A${b} ${b} 0 0 0 ${x + b} ${top + len - b} C${x + b} ${top + len * 0.6} ${x + w / 2} ${top + len * 0.4} ${x + w / 2} ${top} Z`; }
+    return `M${x - w / 2} ${top} C${x - w / 3} ${top + len * 0.55} ${x - 1} ${top + len * 0.95} ${x} ${top + len} C${x + 1} ${top + len * 0.95} ${x + w / 3} ${top + len * 0.55} ${x + w / 2} ${top} Z`;
   }
+  function stalagmitePath(shape, x, base, h, w) {
+    if (shape === "shard") return `M${x - w / 2} ${base + 4} L${x - w * 0.1} ${base - h} L${x + w * 0.16} ${base - h * 0.86} L${x + w / 2} ${base + 4} Z`;
+    if (shape === "icicle") return `M${x - w / 2} ${base + 4} L${x - w * 0.1} ${base - h * 0.85} L${x} ${base - h} L${x + w * 0.1} ${base - h * 0.85} L${x + w / 2} ${base + 4} Z`;
+    if (shape === "lava") { const b = Math.max(3, w * 0.3); return `M${x - w / 2} ${base + 4} C${x - w / 2} ${base - h * 0.4} ${x - b} ${base - h * 0.6} ${x - b} ${base - h + b} A${b} ${b} 0 0 1 ${x + b} ${base - h + b} C${x + b} ${base - h * 0.6} ${x + w / 2} ${base - h * 0.4} ${x + w / 2} ${base + 4} Z`; }
+    return `M${x - w / 2} ${base + 4} C${x - w / 3} ${base - h * 0.4} ${x - w / 6} ${base - h} ${x} ${base - h} C${x + w / 6} ${base - h} ${x + w / 3} ${base - h * 0.4} ${x + w / 2} ${base + 4} Z`;
+  }
+  const grow = (f, L) => L < f.from ? -1 : Math.min(1, Math.log10(L / f.from + 1) / f.span);
 
-  const tips = [];
-  let lastSceneKey = "", lastVisKey = "";
-  function renderScene(force) {
-    const v = currentView(), cave = v.cave, L = v.lifetime;
-    const key = cave.seed + ":" + Math.round(Math.log10(L + 1) * 400) + ":" + isDark();
-    if (force || key !== lastSceneKey) {
-      lastSceneKey = key;
-      applyPalette(cave);
-      $("caveName").textContent = cave.name;
-      const small = el("small", null, visiting ? nameOf(visiting.id) + "'s cave" : "Cave " + state.caveNo);
-      $("caveName").appendChild(small);
-      $("ceiling").setAttribute("d", smoothPath(cave.ceil, 0));
-      $("floor").setAttribute("d", smoothPath(cave.floor, 400));
-      drawFormations(cave, L);
+  // Draws rock, type details and formations into g. Pushes drip tips into `tips`.
+  function drawCaveBase(g, cave, L, tips) {
+    const { ceilAt, floorAt } = cave, shape = cave.type.shape;
+    svgEl(g, "path", { d: smoothPath(cave.ceil, 0), fill: "var(--rock)" });
+    svgEl(g, "path", { d: smoothPath(cave.floor, 400), fill: "var(--rock)" });
+    const xr = rng(cave.extraSeed);
+    if (cave.typeId === "lava") {
+      for (let i = 0; i < 5; i++) {
+        let x = 30 + xr() * 740, y = floorAt(x) + 12 + xr() * 22, d = `M${x} ${y}`;
+        for (let k = 0; k < 4; k++) { x += 8 + xr() * 14; y += -5 + xr() * 10; d += ` L${x} ${y}`; }
+        svgEl(g, "path", { d, stroke: "var(--stone-edge)", "stroke-width": 1.4, fill: "none", opacity: 0.6, "stroke-linecap": "round" });
+      }
     }
-    const visKey = cave.seed + ":" + v.gifts.map(g => g.id).join(",") + ":" + Math.floor(Date.now() / 600000) + ":" + isDark();
-    if (force || visKey !== lastVisKey) { lastVisKey = visKey; drawVisitors(cave, v.gifts); }
-  }
-
-  function grow(f, L) { return L < f.from ? -1 : Math.min(1, Math.log10(L / f.from + 1) / f.span); }
-
-  function drawFormations(cave, L) {
-    const g = $("formations"); g.textContent = ""; tips.length = 0;
-    const { ceilAt, floorAt } = cave;
+    if (cave.type.lake) {
+      const y = Math.max(...cave.floor.map(p => p[1])) - 4;
+      svgEl(g, "path", { d: `M0 ${y} H800 V400 H0 Z`, fill: "var(--water)", opacity: 0.28 });
+    }
+    if (cave.typeId === "crystal") {
+      for (let c = 0; c < 3; c++) {
+        const x0 = 60 + xr() * 680, y0 = floorAt(x0) + 3;
+        for (let i = 0; i < 4; i++) {
+          const cx = x0 - 6 + i * 4, h = 6 + xr() * 12, a = -20 + i * 13;
+          svgEl(g, "path", { d: `M${cx - 2} ${y0} L${cx} ${y0 - h} L${cx + 2} ${y0} Z`, fill: "var(--stone)", opacity: 0.85, transform: `rotate(${a} ${cx} ${y0})` });
+        }
+      }
+    }
+    if (cave.typeId === "ice") {
+      for (let i = 0; i < 26; i++) {
+        const x = 10 + xr() * 780, y = ceilAt(x) + 2 + xr() * 8, s = 1 + xr() * 1.6;
+        svgEl(g, "path", { d: `M${x} ${y - s} L${x + s * 0.6} ${y} L${x} ${y + s} L${x - s * 0.6} ${y} Z`, fill: "#ffffff", opacity: 0.7 });
+      }
+    }
     if (L >= 1e4) {
       const p = Math.min(1, Math.log10(L / 1e4 + 1) / 3);
-      const left = cave.flowSide === "left";
-      const wx = left ? 0 : 800, s = left ? 1 : -1;
+      const left = cave.flowSide === "left", wx = left ? 0 : 800, s = left ? 1 : -1;
       const top = ceilAt(left ? 20 : 780), bottom = top + 40 + 240 * p;
       svgPath(g, `M${wx} ${top} C${wx + s * (10 + 30 * p)} ${top + 60} ${wx + s * (30 + 40 * p)} ${bottom - 60} ${wx + s * (40 + 50 * p)} ${bottom} C${wx + s * 25} ${bottom + 8} ${wx + s * 10} ${bottom + 4} ${wx} ${bottom} Z`, "var(--stone)", 0.85);
     }
@@ -749,15 +1124,49 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       const p = grow(s, L); if (p < 0) continue;
       const base = floorAt(s.x), h = 4 + s.max * p, w = 8 + s.w * p;
       sgTop[s.x] = base - h;
-      svgPath(g, `M${s.x - w / 2} ${base + 4} C${s.x - w / 3} ${base - h * 0.4} ${s.x - w / 6} ${base - h} ${s.x} ${base - h} C${s.x + w / 6} ${base - h} ${s.x + w / 3} ${base - h * 0.4} ${s.x + w / 2} ${base + 4} Z`, "var(--stone)", 1);
+      svgPath(g, stalagmitePath(shape, s.x, base, h, w), "var(--stone)", 1);
     }
     for (const s of cave.stalactites) {
       const p = grow(s, L); if (p < 0) continue;
       const top = ceilAt(s.x) - 4, len = 6 + s.max * p, w = 2 + s.w * p;
-      svgPath(g, `M${s.x - w / 2} ${top} C${s.x - w / 3} ${top + len * 0.55} ${s.x - 1} ${top + len * 0.95} ${s.x} ${top + len} C${s.x + 1} ${top + len * 0.95} ${s.x + w / 3} ${top + len * 0.55} ${s.x + w / 2} ${top} Z`, "var(--stone)", 1);
+      svgPath(g, stalactitePath(shape, s.x, top, len, w), "var(--stone)", 1);
+      if (shape === "icicle" && len > 14) svgEl(g, "path", { d: `M${s.x - w * 0.12} ${top + 3} L${s.x - w * 0.04} ${top + len * 0.7}`, stroke: "#ffffff", "stroke-width": 1, opacity: 0.7 });
       tips.push({ x: s.x, y: top + len, floor: sgTop[s.x] != null ? sgTop[s.x] : floorAt(s.x) });
     }
     if (!tips.length) tips.push({ x: cave.stalactites[0].x, y: ceilAt(cave.stalactites[0].x) + 2, floor: floorAt(cave.stalactites[0].x) });
+  }
+
+  function caveThumb(seed, typeId, L) {
+    const cave = genCave(seed, typeId);
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 800 400"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", cave.name);
+    applyPalette(cave, svg);
+    svgEl(svg, "rect", { x: 0, y: 0, width: 800, height: 400, fill: "var(--cave)" });
+    drawCaveBase(svgEl(svg, "g", {}), cave, L, []);
+    return svg;
+  }
+
+  function currentView() {
+    const homeOf = (unlocked, seed) => Object.keys(unlocked || {}).filter(k => KIND[k]).map(k => ({ id: "home-" + k + "-" + seed, kind: k, from: null, sentAt: unlocked[k] }));
+    if (visiting) { const s = visiting.seed; return { cave: genCave(s, visiting.type), lifetime: visiting.lifetime || 0, gifts: (visiting.gifts || []).concat(homeOf(visiting.home, s)), dpm: visiting.dpm || 4 }; }
+    return { cave: genCave(state.seed, state.caveType), lifetime: state.lifetime, gifts: myGifts.concat(homeOf(state.unlocked, state.seed)), dpm: dripsPerMin() };
+  }
+
+  const tips = [];
+  let lastSceneKey = "", lastVisKey = "";
+  function renderScene(force) {
+    const v = currentView(), cave = v.cave, L = v.lifetime;
+    const key = cave.seed + cave.typeId + ":" + Math.round(Math.log10(L + 1) * 400) + ":" + isDark();
+    if (force || key !== lastSceneKey) {
+      lastSceneKey = key;
+      applyPalette(cave, $("caveBox"));
+      $("caveName").textContent = cave.name;
+      $("caveName").appendChild(el("small", null, (visiting ? nameOf(visiting.id) + "'s cave, " : "Cave " + state.caveNo + ", ") + cave.type.name.toLowerCase()));
+      const g = $("base"); g.textContent = ""; tips.length = 0;
+      drawCaveBase(g, cave, L, tips);
+    }
+    const visKey = cave.seed + ":" + v.gifts.map(g => g.id).join(",") + ":" + Math.floor(Date.now() / 600000) + ":" + isDark();
+    if (force || visKey !== lastVisKey) { lastVisKey = visKey; drawVisitors(cave, v.gifts); }
   }
 
   // ---- visitors ----
@@ -767,14 +1176,12 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     const now = Date.now();
     const order = ["ammonite", "painting", "glow", "spider", "bat", "geode", "olm", "fox", "deer", "bear", "dragon", "caver"];
     for (const kind of order) {
-      const list = gifts.filter(x => x.kind === kind).slice(-12);
-      for (const it of list) {
-        const r = rng(hashStr(it.id));
+      for (const it of gifts.filter(x => x.kind === kind).slice(-12)) {
         const grp = svgEl(g, "g", {});
         const t = document.createElementNS(NS, "title");
-        t.textContent = KIND[kind].name + (it.from ? " from " + nameOf(it.from) : "");
+        t.textContent = KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "") + (it.note ? ": \u201c" + it.note + "\u201d" : "");
         grp.appendChild(t);
-        DRAW[kind](grp, cave, it, r, now);
+        DRAW[kind](grp, cave, it, rng(hashStr(it.id)), now);
       }
     }
   }
@@ -925,6 +1332,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }
   };
 
+
   // ---- bats leave their roost now and then: often at night, rarely by day ----
   const roosts = new Map();
   let flight = null, nextFlight = Date.now() + 15000 + Math.random() * 45000;
@@ -970,6 +1378,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     f.wings.setAttribute("transform", `scale(${0.35 + 0.65 * Math.min(1, k * 4)} ${flap.toFixed(2)})`);
   }
 
+
   // falling drops
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const drops = [];
@@ -998,9 +1407,10 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     requestAnimationFrame(frame);
   }
 
+
   // ---------------- visiting ----------------
   async function visit(o) {
-    visiting = { id: o.id, seed: o.seed >>> 0, lifetime: o.lifetime, dpm: o.dpm, home: o.home || {}, gifts: [] };
+    visiting = { id: o.id, seed: o.seed >>> 0, type: o.type || "limestone", lifetime: o.lifetime, dpm: o.dpm, home: o.home || {}, gifts: [] };
     $("caveBox").classList.add("visiting"); $("backHome").hidden = false;
     clearDrops(); render(true);
     window.scrollTo({ top: $("caveName").getBoundingClientRect().top + window.scrollY - 20, behavior: reduceMotion ? "auto" : "smooth" });
@@ -1023,33 +1433,22 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   const FB = "https://www.gstatic.com/firebasejs/10.12.2/";
   let configured = null; // null while checking for firebase-config.js
   const JOIN_KEY = "dripstone-group-v1";
-  let group = null, myNick = "", connectError = "", F = null, fbApp = null, Auth = null, auth = null, othersUnsub = null;
+  let group = null, myNick = "", connectError = "", F = null, fbApp = null, Auth = null, auth = null;
   let authUser = null, authReady = false;
-  try { const j = JSON.parse(localStorage.getItem(JOIN_KEY) || "null"); if (j && j.group && j.nick) { group = j.group; myNick = j.nick; } } catch {}
+  try { const j = JSON.parse(localStorage.getItem(JOIN_KEY) || "null"); if (j && j.group) { group = j.group; myNick = j.nick || ""; } } catch {}
   const base = () => "groups/" + group;
+  const cleanCode = (v) => v.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+  const pwHashFor = (code, pw) => sha256("dripstone:" + code + ":" + pw);
 
   $("join").addEventListener("submit", (e) => {
     e.preventDefault();
-    const g = $("joinCode").value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const g = cleanCode($("joinCode").value);
     const n = $("joinNick").value.trim().slice(0, 24);
     if (g.length < 6) { $("joinMsg").textContent = "Use a group code of at least 6 letters, numbers or dashes."; return; }
     if (!n) { $("joinMsg").textContent = "Add the name other people will see."; return; }
-    if (!authUser) { $("joinMsg").textContent = "Sign in with Google first."; return; }
-    $("joinMsg").textContent = "";
-    joinGroup(g, n);
+    if (!authUser || !db) { $("joinMsg").textContent = "Sign in with Google first."; return; }
+    joinGroup(g, $("joinPw").value, n);
   });
-
-  async function sendGift(o, kind) {
-    if (!db || !myId) return;
-    const k = o.id + ":" + kind;
-    if (!KIND[kind] || !state.unlocked[kind] || (state.sent[k] || 0) + KIND[kind].cd > Date.now()) return;
-    try {
-      await F.addDoc(F.collection(db, base() + "/gifts"), { to: o.id, from: myId, kind, sentAt: Date.now() });
-      state.sent[k] = Date.now(); saveLocal(); pushCloud(true);
-      news(KIND[kind].name + " sent to " + nameOf(o.id) + "'s cave.");
-      render(true);
-    } catch (e) { news("The visitor couldn't be sent (" + (e.code || "error") + "). Try again in a moment."); }
-  }
 
   const ARRIVE = {
     bat: (n) => "A bat from " + n + " has settled on your ceiling.",
@@ -1065,33 +1464,77 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     bear: (n) => "A cave bear from " + n + " lay down to hibernate.",
     dragon: (n) => "A dragon from " + n + " is asleep on a pile of gold."
   };
-  let giftUnsub = null;
-  function subscribeGifts() {
-    if (!db || !myId) return;
-    if (giftUnsub) { giftUnsub(); giftUnsub = null; }
-    giftUnsub = F.onSnapshot(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", myId)), (snap) => {
-      const all = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-      const mine = all.filter(g => KIND[g.kind]);
-      const fresh = mine.filter(g => !state.seenGifts.includes(g.id));
-      for (const g of fresh.slice(-4)) news(ARRIVE[g.kind](nameOf(g.from)));
-      if (fresh.length) { state.seenGifts = state.seenGifts.concat(fresh.map(g => g.id)).slice(-300); saveLocal(); }
-      advance(Date.now());
+
+  let unsubs = [];
+  const keep = (u) => { unsubs.push(u); return u; };
+
+  function subscribeGifts(g) {
+    keep(F.onSnapshot(F.query(F.collection(db, "groups/" + g + "/gifts"), F.where("to", "==", myId)), (snap) => {
+      if (group !== g) return;
+      const mine = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(x => KIND[x.kind]);
+      const fresh = mine.filter(x => !state.seenGifts.includes(x.id));
+      for (const x of fresh.slice(-4)) news(ARRIVE[x.kind](nameOf(x.from, x.fromNick)) + (x.note ? " Note: \u201c" + x.note + "\u201d" : ""));
+      if (fresh.length) { state.seenGifts = state.seenGifts.concat(fresh.map(x => x.id)).slice(-300); saveLocal(); }
+      advance(Date.now()); // bank earnings at the old rate before bonuses change
       myGifts = mine;
       render(true);
-    }, () => {});
+    }, () => {}));
   }
-
-  function subscribeOthers() {
-    if (othersUnsub) { othersUnsub(); othersUnsub = null; }
-    othersUnsub = F.onSnapshot(F.collection(db, base() + "/caves"), (snap) => {
+  function subscribeOthers(g) {
+    keep(F.onSnapshot(F.collection(db, "groups/" + g + "/caves"), (snap) => {
+      if (group !== g) return;
       const all = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
       for (const o of all) nicks[o.id] = o.nick || "Someone";
-      const list = all.filter(o => o.id !== myId).sort((a, b) => (b.updated || 0) - (a.updated || 0));
-      others = list;
-      othersKey = list.map(o => o.id + o.seed + o.nick + Math.round(Math.log10((o.lifetime || 0) + 1) * 10)).join(",");
-      if (visiting) { const o = list.find(x => x.id === visiting.id); if (o) { visiting.lifetime = o.lifetime; visiting.dpm = o.dpm; visiting.home = o.home || {}; if ((o.seed >>> 0) !== visiting.seed) goHome(); } }
+      others = all.filter(o => o.id !== myId).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+      if (visiting) {
+        const o = others.find(x => x.id === visiting.id);
+        if (!o) goHome();
+        else { visiting.lifetime = o.lifetime; visiting.dpm = o.dpm; visiting.home = o.home || {}; if ((o.seed >>> 0) !== visiting.seed || o.type !== visiting.type) goHome(); }
+      }
       render(true);
-    }, () => {});
+    }, () => {}));
+  }
+  function subscribeProject(g) {
+    keep(F.onSnapshot(F.doc(db, "groups/" + g + "/project/main"), (snap) => {
+      if (group !== g) return;
+      advance(Date.now());
+      project = snap.exists() ? snap.data() : null;
+      render(true);
+    }, () => {}));
+  }
+  async function loadSendlog(g) {
+    try {
+      const snap = await F.getDocs(F.query(F.collection(db, "groups/" + g + "/sendlog"), F.where("from", "==", myId)));
+      for (const d of snap.docs) {
+        const x = d.data(), t = x.at && x.at.toMillis ? x.at.toMillis() : 0, k = x.to + ":" + x.kind;
+        if (t > (state.sent[k] || 0)) state.sent[k] = t;
+      }
+      saveLocal(); render(true);
+    } catch {}
+  }
+
+  async function sendGift(o, kind, note) {
+    if (!db || !myId || groupState !== "ready") return;
+    const k = o.id + ":" + kind;
+    if (!KIND[kind] || !state.unlocked[kind] || (state.sent[k] || 0) + KIND[kind].cd > Date.now()) return;
+    // The gift and its send-log entry go together; the server checks the waiting time on the log entry.
+    const giftRef = F.doc(F.collection(db, base() + "/gifts"));
+    const logRef = F.doc(db, base() + "/sendlog/" + myId + "_" + o.id + "_" + kind);
+    const data = { to: o.id, from: myId, fromNick: (myNick || "Someone").slice(0, 24), kind, sentAt: Date.now() };
+    if (note) data.note = note.slice(0, 80);
+    try {
+      const batch = F.writeBatch(db);
+      batch.set(giftRef, data);
+      batch.set(logRef, { from: myId, to: o.id, kind, at: F.serverTimestamp(), giftId: giftRef.id });
+      await batch.commit();
+      state.sent[k] = Date.now(); noteFor[o.id] = ""; saveLocal(); pushCloud(true);
+      news(KIND[kind].name + " sent to " + nameOf(o.id) + "'s cave" + (note ? ", with your note." : "."));
+      if (document.activeElement) document.activeElement.blur();
+      render(true);
+    } catch (e) {
+      if (e && e.code === "permission-denied") { loadSendlog(group); news("The server says that visitor isn't ready to send yet."); }
+      else news("The visitor couldn't be sent (" + ((e && e.code) || "error") + "). Try again in a moment.");
+    }
   }
 
   async function loadConfig() {
@@ -1135,38 +1578,36 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       render(true);
     });
   }
+  function signOutClick() { if (confirm("Sign out? Your cave stays saved to your Google account.")) Auth.signOut(auth); }
 
-  // Everything that belongs to the person lives under users/<uid>, so it follows them to any device:
+  // Everything that belongs to the person lives under users/<uid>:
   //   users/<uid>            which group they're in and their name
   //   users/<uid>/data/save  their cave
   const userDoc = () => F.doc(db, "users/" + myId);
   let saveDoc = null, saveLoaded = false, lastRemote = 0, savedAt = 0, saveError = "";
+  let saveUnsub = null, remoteEpoch = 0;
 
   async function loadAccount() {
-    saveLoaded = false; saveError = "";
+    saveLoaded = false; saveError = ""; connectError = "";
     try {
       db = F.getFirestore(fbApp); canWrite = true;
       myId = authUser.uid;
       saveDoc = F.doc(db, "users/" + myId + "/data/save");
-
-      // 1. Group and name: take them from the account if this device doesn't have them yet.
       const prof = await F.getDoc(userDoc());
       const p = prof.exists() ? prof.data() : {};
       if (p.group && !group) {
         group = p.group; myNick = p.nick || myNick;
         try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
-      } else if (group && p.group !== group) {
-        await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() });
       }
-      if (!$("joinNick").value) $("joinNick").value = (myNick || (authUser.displayName || "").split(" ")[0]).slice(0, 24);
+      if (!myNick) myNick = (p.nick || (authUser.displayName || "").split(" ")[0] || "Caver").slice(0, 24);
+      if (!$("joinNick").value) $("joinNick").value = myNick;
 
-      // 2. The cave. Older versions kept it inside the group, so look there too.
+      // The cave. Older versions kept it inside the group, so look there too.
       let snap = await F.getDoc(saveDoc);
-      if (!snap.exists() && group) snap = await F.getDoc(F.doc(db, "groups/" + group + "/saves/" + myId));
+      if (!snap.exists() && group) { try { snap = await F.getDoc(F.doc(db, "groups/" + group + "/saves/" + myId)); } catch {} }
       if (snap.exists()) {
         const remote = normalise(snap.data());
-        // A newer "erase everything" always wins. Otherwise keep whichever cave has come further,
-        // so a fresh device never overwrites real progress.
+        // A newer "erase everything" always wins. Otherwise keep whichever cave has come further.
         if (remote && (remote.epoch > state.epoch || (remote.epoch === state.epoch && remote.pastTotal + remote.lifetime >= allTime()))) {
           adoptRemote(remote, remote.pastTotal + remote.lifetime > 0 ? "Your saved cave was loaded from your Google account." : "");
         }
@@ -1174,9 +1615,8 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       saveLoaded = true;
       await pushCloud(true);
       watchSave();
-
-      // 3. The group, if there is one.
-      if (group) startGroup();
+      loadRankings(true);
+      if (group) await startGroup(null);
       render(true);
     } catch (e) {
       db = null; myId = null; saveDoc = null;
@@ -1187,13 +1627,12 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
 
   function adoptRemote(remote, msg) {
     const from = remote.lastTick; state = remote; catchUp(from); saveLocal();
-    lastSceneKey = ""; lastVisKey = ""; minuteKey = "";
+    lastSceneKey = ""; lastVisKey = ""; minuteKey = ""; moveKey = ""; atlasKey = "";
     if (msg) news(msg);
     render(true);
   }
 
   // If everything gets erased on another device, follow along here too.
-  let saveUnsub = null, remoteEpoch = 0;
   function watchSave() {
     if (saveUnsub) saveUnsub();
     saveUnsub = F.onSnapshot(saveDoc, (snap) => {
@@ -1202,105 +1641,181 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       if (!remote) return;
       remoteEpoch = Math.max(remoteEpoch, remote.epoch);
       if (remote.epoch > state.epoch) {
-        myGifts = [];
         $("news").textContent = "";
         adoptRemote(remote, "Everything was erased on another device, so this one starts over too.");
       }
     }, () => {});
   }
 
-  let groupOwner = null, banned = [], banUnsub = null, bannedListUnsub = null;
-  async function startGroup() {
-    nicks[myId] = myNick;
-    myGifts = [];
+  function stopGroup() {
+    for (const u of unsubs) { try { u(); } catch {} }
+    unsubs = [];
+    if (visiting) goHome();
+    myGifts = []; others = []; banned = []; project = null;
+    groupData = null; groupOwner = null; groupState = "none";
+  }
+
+  // Opens the group in `group`: makes sure we're a member, then listens to everything in it.
+  async function startGroup(pwHash) {
     const g = group;
+    stopGroup(); groupState = "connecting"; render(true);
     try {
-      // Who owns the group? The first person to open it with this version becomes the owner.
       const gref = F.doc(db, "groups/" + g);
       let gs = await F.getDoc(gref);
       if (!gs.exists()) {
-        try { await F.setDoc(gref, { owner: myId, created: Date.now() }); } catch {}
+        // A group from an old version without an owner yet: whoever opens it first owns it.
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: false });
         gs = await F.getDoc(gref);
       }
       if (group !== g) return;
-      groupOwner = gs.exists() ? gs.data().owner : null;
-      // Were we removed?
-      const mine = await F.getDoc(F.doc(db, "groups/" + g + "/banned/" + myId));
-      if (mine.exists()) { removedFromGroup(g); return; }
+      groupData = gs.data(); groupOwner = groupData.owner;
+      if (groupOwner === myId && !groupData.publicId) {
+        try { await F.updateDoc(gref, { publicId: randomId(), name: groupData.name || randomGroupName(), hasPw: false }); } catch {}
+      }
+      // Membership: needs the password if the group has one.
+      const mref = F.doc(db, "groups/" + g + "/members/" + myId);
+      const ms = await F.getDoc(mref);
+      if (!ms.exists()) {
+        const b = await F.getDoc(F.doc(db, "groups/" + g + "/banned/" + myId));
+        if (b.exists()) { await removedFromGroup(g, true); return; }
+        try { await F.setDoc(mref, { pw: pwHash || await pwHashFor(g, ""), joined: Date.now(), nick: myNick }); }
+        catch { needPassword(g, !!pwHash); return; }
+      }
+      if (group !== g) return;
+      keep(F.onSnapshot(mref, (snap) => { if (!snap.exists() && group === g) removedFromGroup(g); }, () => {}));
+      keep(F.onSnapshot(gref, (snap) => {
+        if (!snap.exists() || group !== g) return;
+        const renamed = groupData && groupData.name !== snap.data().name;
+        groupData = snap.data(); groupOwner = groupData.owner;
+        if (renamed) pushCloud(true);
+        render(true);
+      }, () => {}));
+      if (groupOwner === myId) {
+        keep(F.onSnapshot(F.collection(db, "groups/" + g + "/banned"), (snap) => {
+          banned = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+          render(true);
+        }, () => {}));
+      }
+      nicks[myId] = myNick;
+      groupState = "ready";
+      subscribeGifts(g); subscribeOthers(g); subscribeProject(g); loadSendlog(g);
+      await pushCloud(true);
+      render(true);
     } catch (e) {
-      connectError = "Couldn't open the group (" + (e.code || "error") + ").";
-      render(true); return;
+      if (group !== g) return;
+      groupState = "error";
+      connectError = "Couldn't open the group (" + (e.code || e.message || "error") + ").";
+      render(true);
     }
-    // Notice right away if the owner removes us while we're playing.
-    if (banUnsub) banUnsub();
-    banUnsub = F.onSnapshot(F.doc(db, "groups/" + g + "/banned/" + myId), (snap) => { if (snap.exists() && group === g) removedFromGroup(g); }, () => {});
-    if (bannedListUnsub) { bannedListUnsub(); bannedListUnsub = null; }
-    if (groupOwner === myId) {
-      bannedListUnsub = F.onSnapshot(F.collection(db, "groups/" + g + "/banned"), (snap) => {
-        banned = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        othersKey += "b"; render(true);
-      }, () => {});
+  }
+
+  async function joinGroup(code, pw, nick) {
+    $("joinMsg").textContent = "Joining...";
+    myNick = nick;
+    const pwHash = await pwHashFor(code, pw);
+    try {
+      const gref = F.doc(db, "groups/" + code);
+      const gs = await F.getDoc(gref);
+      if (!gs.exists()) {
+        // A new group: you own it. The password itself is never stored, only a fingerprint of it.
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw });
+        if (pw) await F.setDoc(F.doc(db, "groups/" + code + "/secret/pw"), { hash: pwHash });
+        news("You created a new group. Share the code" + (pw ? " and the password" : "") + " with others.");
+      }
+    } catch (e) { $("joinMsg").textContent = "Couldn't open that group (" + (e.code || "error") + ")."; return; }
+    group = code;
+    try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
+    await startGroup(pwHash);
+    if (group === code && groupState === "ready") {
+      try { await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() }); } catch {}
+      $("joinMsg").textContent = ""; $("joinPw").value = "";
     }
-    subscribeGifts(); subscribeOthers();
-    pushCloud(true);
+  }
+
+  function needPassword(g, triedOne) {
+    stopGroup();
+    group = null;
+    try { localStorage.removeItem(JOIN_KEY); } catch {}
+    $("joinCode").value = g;
+    $("joinMsg").textContent = triedOne ? "Wrong password for that group." : "That group has a password. Enter it to join.";
     render(true);
+    $("joinPw").focus();
   }
 
-  function stopGroup() {
-    for (const u of [giftUnsub, othersUnsub, banUnsub, bannedListUnsub]) if (u) u();
-    giftUnsub = othersUnsub = banUnsub = bannedListUnsub = null;
-    if (visiting) goHome();
-    myGifts = []; others = []; othersKey = ""; banned = []; groupOwner = null;
-  }
-
-  async function removedFromGroup(g) {
+  async function removedFromGroup(g, knownBan) {
+    let wasBanned = !!knownBan;
+    if (!wasBanned) { try { wasBanned = (await F.getDoc(F.doc(db, "groups/" + g + "/banned/" + myId))).exists(); } catch {} }
     stopGroup();
     group = null;
     try { localStorage.removeItem(JOIN_KEY); } catch {}
     try { await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
-    $("joinMsg").textContent = "The owner of \u201c" + g + "\u201d removed you from that group. You can join a different one.";
-    news("You were removed from the group \u201c" + g + "\u201d. Your cave is still yours.");
+    $("joinMsg").textContent = wasBanned ? "The owner removed you from \u201c" + g + "\u201d. You can join a different group." : "You left \u201c" + g + "\u201d on another device.";
+    news(wasBanned ? "You were removed from a group. Your cave is still yours." : "You're no longer in that group.");
     render(true);
+  }
+
+  async function leaveGroup() {
+    const g = group, hadPw = !!(groupData && groupData.hasPw);
+    group = null;
+    stopGroup();
+    try { await F.deleteDoc(F.doc(db, "groups/" + g + "/caves/" + myId)); } catch {}
+    try { await F.deleteDoc(F.doc(db, "groups/" + g + "/members/" + myId)); } catch {}
+    try { await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
+    try { localStorage.removeItem(JOIN_KEY); } catch {}
+    $("joinMsg").textContent = "You left the group. Join another one, or the same one again with its code" + (hadPw ? " and password." : ".");
+    pushCloud(true); render(true);
   }
 
   async function removePlayer(o) {
     if (groupOwner !== myId) return;
-    if (!confirm("Remove " + nameOf(o.id) + " from this group? They won't be able to rejoin unless you let them back in.")) return;
+    if (!confirm("Remove " + nameOf(o.id) + " from this group? They can't rejoin unless you let them back in.")) return;
     try {
       await F.setDoc(F.doc(db, base() + "/banned/" + o.id), { by: myId, at: Date.now(), nick: o.nick || nameOf(o.id) });
+      await F.deleteDoc(F.doc(db, base() + "/members/" + o.id));
       await F.deleteDoc(F.doc(db, base() + "/caves/" + o.id));
-      // Their visitors belonged to this group, so clear them away.
       const gs = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", o.id)));
       await Promise.all(gs.docs.map(d => F.deleteDoc(d.ref)));
       if (visiting && visiting.id === o.id) goHome();
       news(nameOf(o.id) + " was removed from the group.");
     } catch (e) { news("Couldn't remove that player (" + (e.code || "error") + ")."); }
   }
-
   async function allowBack(b) {
-    try { await F.deleteDoc(F.doc(db, base() + "/banned/" + b.id)); news((b.nick || "That player") + " can join again with the group code."); }
+    try { await F.deleteDoc(F.doc(db, base() + "/banned/" + b.id)); news((b.nick || "That player") + " can join again with the code."); }
     catch (e) { news("Couldn't do that (" + (e.code || "error") + ")."); }
   }
 
-  async function joinGroup(g, n) {
-    group = g; myNick = n;
-    try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
-    try { await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() }); } catch {}
-    startGroup(); render(true);
-  }
-
-  async function leaveGroup() {
-    try { if (db && myId) await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
-    try { localStorage.removeItem(JOIN_KEY); } catch {}
-    location.reload();
-  }
+  $("renameBtn").addEventListener("click", async () => {
+    const name = $("renameInput").value.trim().replace(/\s+/g, " ");
+    if (name.length < 3 || name.length > 32) { $("renameNote").textContent = "Use 3 to 32 characters."; return; }
+    if (groupData && name === groupData.name) return;
+    try {
+      await F.updateDoc(F.doc(db, base()), { name, renamedAt: F.serverTimestamp() });
+      news("The group is now called \u201c" + name + "\u201d.");
+      pushCloud(true);
+    } catch (e) { $("renameNote").textContent = e.code === "permission-denied" ? "The name can only change once a week." : "Couldn't rename (" + (e.code || "error") + ")."; }
+  });
+  $("pwBtn").addEventListener("click", async () => {
+    const pw = $("pwInput").value;
+    try {
+      if (pw) {
+        await F.setDoc(F.doc(db, base() + "/secret/pw"), { hash: await pwHashFor(group, pw) });
+        await F.updateDoc(F.doc(db, base()), { hasPw: true });
+        $("pwNote").textContent = "Password saved. New members need it to join.";
+      } else {
+        await F.deleteDoc(F.doc(db, base() + "/secret/pw"));
+        await F.updateDoc(F.doc(db, base()), { hasPw: false });
+        $("pwNote").textContent = "Password removed. The code alone is enough to join now.";
+      }
+      $("pwInput").value = "";
+    } catch (e) { $("pwNote").textContent = "Couldn't save (" + (e.code || "error") + ")."; }
+  });
 
   function disconnect() {
     stopGroup();
     if (saveUnsub) { saveUnsub(); saveUnsub = null; }
     remoteEpoch = 0;
-    if (visiting) goHome();
-    db = null; myId = null; saveDoc = null; saveLoaded = false; myGifts = []; others = []; othersKey = "";
+    db = null; myId = null; saveDoc = null; saveLoaded = false;
+    rank = { top: [], now: [], at: 0, error: "" };
     updateSaveNote(); render(true);
   }
 
@@ -1317,19 +1832,43 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     if (remoteEpoch > state.epoch) return; // this device is out of date; the watcher will catch up
     if (!force && Date.now() - lastRemote < 60000) return;
     lastRemote = Date.now();
-    try {
-      await F.setDoc(saveDoc, JSON.parse(JSON.stringify(state)));
-      savedAt = Date.now(); saveError = "";
-    } catch (e) { saveError = e.code || "error"; }
-    if (group) {
+    try { await F.setDoc(saveDoc, JSON.parse(JSON.stringify(state))); savedAt = Date.now(); saveError = ""; }
+    catch (e) { saveError = e.code || "error"; }
+    const cave = genCave(state.seed, state.caveType);
+    if (group && groupState === "ready") {
       try {
         await F.setDoc(F.doc(db, base() + "/caves/" + myId), {
-          nick: myNick, seed: state.seed, name: genCave(state.seed).name, caveNo: state.caveNo,
+          nick: myNick, seed: state.seed, type: state.caveType, name: cave.name, caveNo: state.caveNo,
           lifetime: state.lifetime, allTime: allTime(), home: state.unlocked, dpm: dripsPerMin(), created: state.created, updated: Date.now()
         });
       } catch {}
     }
+    if (state.public !== false) {
+      try {
+        await F.setDoc(F.doc(db, "players/" + myId), {
+          nick: (myNick || "Caver").slice(0, 24), allTime: allTime(), caveName: cave.name, caveType: state.caveType,
+          groupName: (group && groupData && groupData.name) || "", groupPub: (group && groupData && groupData.publicId) || "",
+          projectTotal: (project && project.total) || 0, updated: Date.now()
+        });
+      } catch {}
+    }
     updateSaveNote();
+  }
+
+  async function loadRankings(force) {
+    if (!db || !authUser) return;
+    if (!force && Date.now() - rank.at < 5 * MIN) return;
+    rank.at = Date.now();
+    try {
+      const [a, b] = await Promise.all([
+        F.getDocs(F.query(F.collection(db, "players"), F.orderBy("allTime", "desc"), F.limit(200))),
+        F.getDocs(F.query(F.collection(db, "players"), F.where("updated", ">", Date.now() - ONLINE_WINDOW), F.limit(50)))
+      ]);
+      rank.top = a.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      rank.now = b.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((x, y) => (y.allTime || 0) - (x.allTime || 0));
+      rank.error = "";
+    } catch (e) { rank.error = e.code || "error"; }
+    renderRankings();
   }
 
   function catchUp(fromTick) {
@@ -1340,14 +1879,15 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   $("wipe").addEventListener("click", async () => {
     if (!confirm("Erase everything, including past caves, unlocks, visitors and your experience bonus?")) return;
     const epoch = Math.max(Date.now(), state.epoch + 1, remoteEpoch + 1);
-    state = freshCave(); state.epoch = epoch;
+    const keepPublic = state.public;
+    state = freshCave(); state.epoch = epoch; state.public = keepPublic;
     myGifts = [];
     if (visiting) goHome();
     $("news").textContent = "";
-    lastSceneKey = ""; lastVisKey = ""; minuteKey = "";
+    lastSceneKey = ""; lastVisKey = ""; minuteKey = ""; moveKey = ""; atlasKey = "";
     saveLocal(); render(true);
     // Visitors live in the group, so remove the ones sent to you as well.
-    if (db && myId && group) {
+    if (db && myId && group && groupState === "ready") {
       try {
         const snap = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", myId)));
         await Promise.all(snap.docs.map(d => F.deleteDoc(d.ref)));
@@ -1359,9 +1899,9 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) { advance(Date.now()); saveLocal(); pushCloud(true); }
-    else { catchUp(state.lastTick); render(true); }
+    else { catchUp(state.lastTick); render(true); pushCloud(true); loadRankings(false); }
   });
-  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render(true));
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { moveKey = ""; atlasKey = ""; render(true); });
 
   buildUpgrades();
   catchUp(state.lastTick);
@@ -1369,7 +1909,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   saveLocal();
   requestAnimationFrame(frame);
   setInterval(() => { advance(Date.now()); render(false); }, 1000);
-  setInterval(() => { saveLocal(); pushCloud(false); }, 10000);
+  setInterval(() => { saveLocal(); if (!document.hidden) pushCloud(false); loadRankings(false); }, 10000);
   loadConfig();
 })();
 </script>
