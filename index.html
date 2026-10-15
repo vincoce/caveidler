@@ -577,7 +577,12 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
       ul.appendChild(li);
       return;
     }
-    if (!group) return;
+    if (!group) {
+      // Show problems even before a group is joined; otherwise a failed load looks like "no group".
+      if (connectError) ul.appendChild(el("li", "empty", connectError));
+      ul.appendChild(el("li", "empty", "Signed in as " + (authUser.email || authUser.displayName || "a Google account") + ". If you've joined a group on another device, it appears here automatically. You can also type the same code."));
+      return;
+    }
     if (!db || !myId) { ul.appendChild(el("li", "empty", connectError || "Connecting to your group...")); return; }
     const now = Date.now();
     if (!others.length) ul.appendChild(el("li", "empty", "Nobody else is in this group yet. Send someone the link and the group code."));
@@ -607,10 +612,28 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
         b.addEventListener("click", () => sendGift(o, sel.value));
         acts.append(sel, b);
       } else acts.appendChild(el("span", "meta", "Your first visitor unlocks at " + mass(KINDS[0].at) + " all-time."));
+      if (groupOwner === myId) {
+        const kick = el("button", "link", "Remove from group"); kick.type = "button";
+        kick.addEventListener("click", () => removePlayer(o));
+        acts.appendChild(kick);
+      }
       li.appendChild(acts);
       ul.appendChild(li);
     }
-    const me = el("li", "empty", "You're in group \u201c" + group + "\u201d as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + ". ");
+    if (groupOwner === myId && banned.length) {
+      const li = el("li");
+      li.append(el("div", "who", "Removed players"));
+      for (const b of banned) {
+        const row = el("div", "meta", (b.nick || "Someone") + ", removed " + dateStr(b.at || 0) + ". ");
+        const back = el("button", "link", "Let back in"); back.type = "button";
+        back.addEventListener("click", () => allowBack(b));
+        row.appendChild(back);
+        li.appendChild(row);
+      }
+      ul.appendChild(li);
+    }
+    const ownerText = !groupOwner ? "" : groupOwner === myId ? " You created this group, so you can remove players." : " Created by " + nameOf(groupOwner) + ".";
+    const me = el("li", "empty", "You're in group \u201c" + group + "\u201d as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + "." + ownerText + " ");
     const leave = el("button", "link", "Leave group"); leave.type = "button";
     leave.addEventListener("click", () => { if (confirm("Leave this group? Your cave stays with your account.")) leaveGroup(); });
     const out = el("button", "link", "Sign out"); out.type = "button";
@@ -1186,11 +1209,77 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
     }, () => {});
   }
 
-  function startGroup() {
+  let groupOwner = null, banned = [], banUnsub = null, bannedListUnsub = null;
+  async function startGroup() {
     nicks[myId] = myNick;
     myGifts = [];
+    const g = group;
+    try {
+      // Who owns the group? The first person to open it with this version becomes the owner.
+      const gref = F.doc(db, "groups/" + g);
+      let gs = await F.getDoc(gref);
+      if (!gs.exists()) {
+        try { await F.setDoc(gref, { owner: myId, created: Date.now() }); } catch {}
+        gs = await F.getDoc(gref);
+      }
+      if (group !== g) return;
+      groupOwner = gs.exists() ? gs.data().owner : null;
+      // Were we removed?
+      const mine = await F.getDoc(F.doc(db, "groups/" + g + "/banned/" + myId));
+      if (mine.exists()) { removedFromGroup(g); return; }
+    } catch (e) {
+      connectError = "Couldn't open the group (" + (e.code || "error") + ").";
+      render(true); return;
+    }
+    // Notice right away if the owner removes us while we're playing.
+    if (banUnsub) banUnsub();
+    banUnsub = F.onSnapshot(F.doc(db, "groups/" + g + "/banned/" + myId), (snap) => { if (snap.exists() && group === g) removedFromGroup(g); }, () => {});
+    if (bannedListUnsub) { bannedListUnsub(); bannedListUnsub = null; }
+    if (groupOwner === myId) {
+      bannedListUnsub = F.onSnapshot(F.collection(db, "groups/" + g + "/banned"), (snap) => {
+        banned = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        othersKey += "b"; render(true);
+      }, () => {});
+    }
     subscribeGifts(); subscribeOthers();
     pushCloud(true);
+    render(true);
+  }
+
+  function stopGroup() {
+    for (const u of [giftUnsub, othersUnsub, banUnsub, bannedListUnsub]) if (u) u();
+    giftUnsub = othersUnsub = banUnsub = bannedListUnsub = null;
+    if (visiting) goHome();
+    myGifts = []; others = []; othersKey = ""; banned = []; groupOwner = null;
+  }
+
+  async function removedFromGroup(g) {
+    stopGroup();
+    group = null;
+    try { localStorage.removeItem(JOIN_KEY); } catch {}
+    try { await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
+    $("joinMsg").textContent = "The owner of \u201c" + g + "\u201d removed you from that group. You can join a different one.";
+    news("You were removed from the group \u201c" + g + "\u201d. Your cave is still yours.");
+    render(true);
+  }
+
+  async function removePlayer(o) {
+    if (groupOwner !== myId) return;
+    if (!confirm("Remove " + nameOf(o.id) + " from this group? They won't be able to rejoin unless you let them back in.")) return;
+    try {
+      await F.setDoc(F.doc(db, base() + "/banned/" + o.id), { by: myId, at: Date.now(), nick: o.nick || nameOf(o.id) });
+      await F.deleteDoc(F.doc(db, base() + "/caves/" + o.id));
+      // Their visitors belonged to this group, so clear them away.
+      const gs = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", o.id)));
+      await Promise.all(gs.docs.map(d => F.deleteDoc(d.ref)));
+      if (visiting && visiting.id === o.id) goHome();
+      news(nameOf(o.id) + " was removed from the group.");
+    } catch (e) { news("Couldn't remove that player (" + (e.code || "error") + ")."); }
+  }
+
+  async function allowBack(b) {
+    try { await F.deleteDoc(F.doc(db, base() + "/banned/" + b.id)); news((b.nick || "That player") + " can join again with the group code."); }
+    catch (e) { news("Couldn't do that (" + (e.code || "error") + ")."); }
   }
 
   async function joinGroup(g, n) {
@@ -1207,8 +1296,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   }
 
   function disconnect() {
-    if (giftUnsub) { giftUnsub(); giftUnsub = null; }
-    if (othersUnsub) { othersUnsub(); othersUnsub = null; }
+    stopGroup();
     if (saveUnsub) { saveUnsub(); saveUnsub = null; }
     remoteEpoch = 0;
     if (visiting) goHome();
