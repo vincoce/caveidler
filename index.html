@@ -116,7 +116,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
 :root { --online: #3f9a5a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --online: #7fd39a; } }
 :root[data-theme="dark"] { --online: #7fd39a; }
-.join { grid-template-columns: 1fr 1fr 1fr auto; }
+.join { grid-template-columns: 1fr 1fr auto; }
 @media (max-width: 640px) { .join { grid-template-columns: 1fr; } }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 12px; }
 .card { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; }
@@ -150,6 +150,14 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .rank .sub2 { color: var(--muted); font-size: 0.875rem; font-weight: 400; display: block; }
 .rank .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
 .rank li.me .nm { color: var(--ochre); }
+.namebox { margin-bottom: 26px; }
+.namebox .setrow { margin-top: 0; }
+.request { border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; margin-bottom: 14px; }
+.request p { margin: 0; }
+.reqs { border: 1px solid var(--ochre); border-radius: 4px; padding: 6px 16px 10px; margin-bottom: 14px; }
+.reqs h3 { font: 600 1rem/1.3 "Figtree", system-ui, sans-serif; margin: 10px 0 4px; }
+.askrow { grid-column: 2 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.askrow input.note { font: 400 0.9rem/1.2 "Figtree", system-ui, sans-serif; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; flex: 1 1 180px; min-width: 0; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.925rem; color: var(--muted); }
 .note-q { color: var(--ink); font-style: italic; }
 
@@ -261,15 +269,23 @@ main { padding-top: 18px; }
   <div class="page" data-page="group" hidden>
     <div class="cols">
       <section id="groupBox">
+        <div class="namebox" id="nameBox" hidden>
+          <div class="setrow"><label>Your name, as others see it<input id="nickInput" maxlength="24" autocomplete="nickname"></label><button class="ghost" id="nickBtn" type="button">Change name</button></div>
+          <p class="empty" id="nickNote"></p>
+        </div>
         <h2>Your group</h2>
         <p class="sub">Everyone in a group sees each other's caves and can send visitors.</p>
         <form class="join" id="join" hidden>
           <label>Group code<input id="joinCode" autocomplete="off" spellcheck="false" placeholder="for example cave-7392" maxlength="40"></label>
           <label>Password<input id="joinPw" type="password" autocomplete="off" placeholder="optional" maxlength="64"></label>
-          <label>Your name<input id="joinNick" autocomplete="nickname" maxlength="24"></label>
           <button class="main" type="submit">Join</button>
           <p class="empty" id="joinMsg">A code nobody uses yet creates a new group, and you become its owner. Add a password if you want one.</p>
         </form>
+        <div class="request" id="requestBox" hidden>
+          <p id="requestText"></p>
+          <div class="setrow"><label>Message to the owner (optional)<input id="reqNote" maxlength="120" placeholder="for example: it's Anna from the climbing gym"></label><button class="main" id="reqBtn" type="button">Ask to join</button></div>
+        </div>
+        <div id="pendingBox"></div>
         <div id="groupInfo"></div>
         <details class="owner" id="ownerBox" hidden>
           <summary>Group settings</summary>
@@ -277,7 +293,11 @@ main { padding-top: 18px; }
           <p class="empty" id="renameNote"></p>
           <div class="setrow"><label>Password<input id="pwInput" type="password" autocomplete="new-password" maxlength="64" placeholder="leave empty to remove it"></label><button class="ghost" id="pwBtn" type="button">Save password</button></div>
           <p class="empty" id="pwNote">People already in the group stay in. The password is only asked from new members.</p>
+          <label class="check" style="margin-top:14px"><input type="checkbox" id="listedToggle"> Let people ask to join from the Groups tab in Rankings</label>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="approvalToggle"> New members need my approval</label>
+          <p class="empty" id="approvalNote">When this is on, nobody can join with the code or password alone. They send a request, and you accept or decline it here.</p>
         </details>
+        <div id="requestsBox"></div>
         <ul class="list" id="others"></ul>
       </section>
       <div>
@@ -845,11 +865,15 @@ main { padding-top: 18px; }
   let others = [];
   const pickFor = {}, noteFor = {};
   let groupState = "none", groupData = null, groupOwner = null, banned = [];
+  let requests = [];          // join requests waiting (owner only)
+  let pending = null;         // { group, name } while my own request waits
+  let requestFor = null;      // { group, name, approval } when the join form offers a request
   const isOnline = (t) => t && Date.now() - t < ONLINE_WINDOW;
 
   function renderGroup() {
     const signedIn = !!authUser;
-    $("join").hidden = !(configured && signedIn && db && !group);
+    $("join").hidden = !(configured && signedIn && db && !group && !pending);
+    renderRequestBox(); renderPending(); renderRequests(); renderNameBox();
     $("ownerBox").hidden = !(group && groupOwner === myId && groupState === "ready");
     renderGroupInfo();
     renderOwner();
@@ -888,9 +912,68 @@ main { padding-top: 18px; }
     box.appendChild(info);
   }
 
+  function renderNameBox() {
+    const show = !!(db && authUser && myId);
+    $("nameBox").hidden = !show;
+    if (!show) return;
+    if (!focusInside("nameBox")) $("nickInput").value = myNick;
+    const t = profile.nickChangedAt && profile.nickChangedAt.toMillis ? profile.nickChangedAt.toMillis() : 0;
+    const next = t + 7 * DAY;
+    if (t && next > Date.now()) {
+      $("nickNote").textContent = "You can change your name once a week. Next change possible on " + dateStr(next) + ".";
+      $("nickBtn").disabled = true;
+    } else {
+      $("nickNote").textContent = t ? "You can change your name once a week." : "You can change your name once a week. The first change is free whenever you like.";
+      $("nickBtn").disabled = false;
+    }
+  }
+
+  function renderRequestBox() {
+    const show = !!(requestFor && !group && !pending && db);
+    $("requestBox").hidden = !show;
+    if (!show) return;
+    $("requestText").textContent = requestFor.approval
+      ? "\u201c" + requestFor.name + "\u201d only lets in people its owner approves. Ask to join, and you'll be let in as soon as they accept."
+      : "Don't know the password for \u201c" + requestFor.name + "\u201d? You can ask its owner to let you in instead.";
+  }
+  function renderPending() {
+    const box = $("pendingBox"); box.textContent = "";
+    if (!pending || group) return;
+    const info = el("div", "groupinfo");
+    info.append(el("div", "gname", pending.name || "Waiting"));
+    const p = el("p", null, "Your request to join is waiting for the owner. You'll be let in automatically as soon as they accept, even while the game is closed. ");
+    const cancel = el("button", "link", "Cancel request"); cancel.type = "button";
+    cancel.addEventListener("click", cancelRequest);
+    p.appendChild(cancel);
+    info.appendChild(p);
+    box.appendChild(info);
+  }
+  function renderRequests() {
+    const box = $("requestsBox"); box.textContent = "";
+    if (!(group && groupOwner === myId && groupState === "ready" && requests.length)) return;
+    const wrap = el("div", "reqs");
+    wrap.appendChild(el("h3", null, requests.length === 1 ? "1 person wants to join" : requests.length + " people want to join"));
+    const ul = el("ul", "list");
+    for (const r of requests.slice().sort((a, b) => a.at - b.at)) {
+      const li = el("li");
+      li.append(el("div", "who", r.nick || "Someone"), el("div", "meta", "Asked " + ago(r.at) + "."));
+      if (r.note) { const m = el("div", "meta"); m.appendChild(el("span", "note-q", "\u201c" + r.note + "\u201d")); li.appendChild(m); }
+      const acts = el("div", "acts");
+      const yes = el("button", "ghost", "Accept"); yes.type = "button"; yes.addEventListener("click", () => acceptRequest(r));
+      const no = el("button", "link", "Decline"); no.type = "button"; no.addEventListener("click", () => declineRequest(r));
+      acts.append(yes, no);
+      li.appendChild(acts);
+      ul.appendChild(li);
+    }
+    wrap.appendChild(ul);
+    box.appendChild(wrap);
+  }
+
   function renderOwner() {
     if ($("ownerBox").hidden || !groupData) return;
     if (!focusInside("ownerBox") && $("renameInput").value === "") $("renameInput").value = groupData.name || "";
+    $("approvalToggle").checked = !!groupData.approval;
+    $("listedToggle").checked = groupData.listed !== false;
     const ra = groupData.renamedAt && groupData.renamedAt.toMillis ? groupData.renamedAt.toMillis() : 0;
     const next = ra + 7 * DAY;
     if (ra && next > Date.now()) {
@@ -1027,8 +1110,10 @@ main { padding-top: 18px; }
   $("giveActs").addEventListener("click", (e) => { const b = e.target.closest("button[data-frac]"); if (b) contribute(Number(b.dataset.frac)); });
 
   // ---------------- rankings ----------------
-  let rank = { top: [], now: [], at: 0, error: "" }, rankTab = "players";
+  let rank = { top: [], now: [], dir: {}, at: 0, error: "" }, rankTab = "players";
+  let askOpen = null; // the group (public id) whose "ask to join" box is open in the rankings
   function renderRankings() {
+    if (focusInside("rankList")) return;
     const ul = $("rankList"); ul.textContent = "";
     const ready = !!(db && authUser);
     $("rankTabs").hidden = !ready; $("publicWrap").hidden = !ready;
@@ -1054,14 +1139,38 @@ main { padding-top: 18px; }
       const groups = new Map();
       for (const p of rank.top) {
         if (!p.groupPub) continue;
-        const g = groups.get(p.groupPub) || { name: p.groupName || "A group", total: 0, members: 0, project: 0, mine: false };
+        const g = groups.get(p.groupPub) || { pub: p.groupPub, name: p.groupName || "A group", total: 0, members: 0, project: 0, mine: false };
         g.total += p.allTime || 0; g.members++; g.project = Math.max(g.project, p.projectTotal || 0);
         if (p.id === myId) g.mine = true;
         groups.set(p.groupPub, g);
       }
       const list = [...groups.values()].sort((a, b) => b.total - a.total).slice(0, 20);
       if (!list.length) ul.appendChild(el("li", "empty", "No groups in the rankings yet."));
-      list.forEach((g, i) => row(i + 1 + ".", g.name, g.members + (g.members === 1 ? " player" : " players") + (g.project ? ", column " + mass(g.project) : ""), mass(g.total), g.mine));
+      const canAsk = !group && !pending;
+      list.forEach((g, i) => {
+        row(i + 1 + ".", (rank.dir[g.pub] && rank.dir[g.pub].name) || g.name, g.members + (g.members === 1 ? " player" : " players") + (g.project ? ", column " + mass(g.project) : ""), mass(g.total), g.mine);
+        const d = rank.dir[g.pub];
+        if (!d || !d.open || g.mine || !canAsk) return;
+        const li = ul.lastChild;
+        const box = el("div", "askrow");
+        if (askOpen === g.pub) {
+          const note = el("input", "note"); note.maxLength = 120; note.placeholder = "Message to the owner (optional)";
+          note.setAttribute("aria-label", "Message to the owner of " + d.name);
+          const send = el("button", "ghost", "Send request"); send.type = "button";
+          const cancel = el("button", "link", "Cancel"); cancel.type = "button";
+          send.addEventListener("click", () => askToJoin(g.pub, d.name, note.value));
+          cancel.addEventListener("click", () => { askOpen = null; renderRankings(); });
+          box.append(note, send, cancel);
+          setTimeout(() => note.focus(), 0);
+        } else {
+          const ask = el("button", "ghost", "Ask to join"); ask.type = "button";
+          ask.addEventListener("click", () => { askOpen = g.pub; renderRankings(); });
+          box.appendChild(ask);
+        }
+        li.appendChild(box);
+      });
+      if (group) ul.appendChild(el("li", "empty", "You're in a group already. To ask to join another one, leave yours first."));
+      else if (pending) ul.appendChild(el("li", "empty", "You have a join request waiting. You can ask another group once it's answered or cancelled."));
     } else {
       if (!rank.now.length) ul.appendChild(el("li", "empty", "Nobody else is playing right now."));
       rank.now.forEach((p, i) => row("\u25CF", p.id === myId ? "You" : p.nick || "Someone", (p.caveName || "") + (p.groupName ? ", " + p.groupName : ""), mass(p.allTime || 0), p.id === myId));
@@ -1507,7 +1616,7 @@ main { padding-top: 18px; }
     for (const a of document.querySelectorAll(".menu a")) {
       if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     }
-    if (name === "group") seenGiftCount = myGifts.length;
+    if (name === "group") { seenGiftCount = myGifts.length; seenReqCount = requests.length; }
     if (name === "explore" && state.lifetime >= NEW_CAVE_AT && !state.choicesSeen) { state.choicesSeen = true; saveLocal(); }
     updateBadges();
     if (name === "rankings") loadRankings(false);
@@ -1518,11 +1627,11 @@ main { padding-top: 18px; }
   const go = (name) => { if (location.hash !== "#" + name) location.hash = name; else showPage(name); };
 
   // Small dots in the menu: a new cave is waiting to be chosen, or new visitors arrived.
-  let seenGiftCount = -1;
+  let seenGiftCount = -1, seenReqCount = 0;
   function updateBadges() {
     $("badgeExplore").hidden = !(state.lifetime >= NEW_CAVE_AT && !state.choicesSeen && page !== "explore");
     if (seenGiftCount < 0) seenGiftCount = myGifts.length;
-    $("badgeGroup").hidden = !(myGifts.length > seenGiftCount && page !== "group");
+    $("badgeGroup").hidden = !((myGifts.length > seenGiftCount || requests.length > seenReqCount) && page !== "group");
   }
 
   // ---------------- online play (Firebase) ----------------
@@ -1541,11 +1650,10 @@ main { padding-top: 18px; }
   $("join").addEventListener("submit", (e) => {
     e.preventDefault();
     const g = cleanCode($("joinCode").value);
-    const n = $("joinNick").value.trim().slice(0, 24);
     if (g.length < 6) { $("joinMsg").textContent = "Use a group code of at least 6 letters, numbers or dashes."; return; }
-    if (!n) { $("joinMsg").textContent = "Add the name other people will see."; return; }
     if (!authUser || !db) { $("joinMsg").textContent = "Sign in with Google first."; return; }
-    joinGroup(g, $("joinPw").value, n);
+    requestFor = null;
+    joinGroup(g, $("joinPw").value);
   });
 
   const ARRIVE = {
@@ -1682,7 +1790,12 @@ main { padding-top: 18px; }
   //   users/<uid>            which group they're in and their name
   //   users/<uid>/data/save  their cave
   const userDoc = () => F.doc(db, "users/" + myId);
+  // Merge, so fields like the time of the last name change are never lost.
+  async function saveProfile(fields) {
+    try { await F.setDoc(userDoc(), Object.assign({}, fields, { updated: Date.now() }), { merge: true }); } catch {}
+  }
   let saveDoc = null, saveLoaded = false, lastRemote = 0, savedAt = 0, saveError = "";
+  let profile = {};
   let saveUnsub = null, remoteEpoch = 0;
 
   async function loadAccount() {
@@ -1697,8 +1810,19 @@ main { padding-top: 18px; }
         group = p.group; myNick = p.nick || myNick;
         try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
       }
-      if (!myNick) myNick = (p.nick || (authUser.displayName || "").split(" ")[0] || "Caver").slice(0, 24);
-      if (!$("joinNick").value) $("joinNick").value = myNick;
+      if (!group && !pending) {
+        try { pending = JSON.parse(localStorage.getItem(PENDING_KEY) || "null"); } catch {}
+        if (pending && !pending.pub) pending = null; // from an older version
+        if (!pending && p.pending) pending = { pub: p.pending, name: "the group" };
+      }
+      // Your name belongs to your account. The first one comes from your Google name.
+      profile = p;
+      if (p.nick) myNick = p.nick;
+      else {
+        myNick = (myNick || (authUser.displayName || "").split(" ")[0] || "Caver").replace(/\s+/g, " ").trim().slice(0, 24) || "Caver";
+        await F.setDoc(userDoc(), { nick: myNick, updated: Date.now() }, { merge: true });
+        profile = Object.assign({}, p, { nick: myNick });
+      }
 
       // The cave. Older versions kept it inside the group, so look there too.
       let snap = await F.getDoc(saveDoc);
@@ -1714,7 +1838,8 @@ main { padding-top: 18px; }
       await pushCloud(true);
       watchSave();
       loadRankings(true);
-      if (group) await startGroup(null);
+      if (group) { pending = null; await startGroup(null); }
+      else if (pending) watchPending();
       render(true);
     } catch (e) {
       db = null; myId = null; saveDoc = null;
@@ -1749,7 +1874,7 @@ main { padding-top: 18px; }
     for (const u of unsubs) { try { u(); } catch {} }
     unsubs = [];
     if (visiting) goHome();
-    myGifts = []; others = []; banned = []; project = null;
+    myGifts = []; others = []; banned = []; requests = []; project = null;
     groupData = null; groupOwner = null; groupState = "none";
   }
 
@@ -1762,7 +1887,7 @@ main { padding-top: 18px; }
       let gs = await F.getDoc(gref);
       if (!gs.exists()) {
         // A group from an old version without an owner yet: whoever opens it first owns it.
-        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: false });
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: false, listed: true });
         gs = await F.getDoc(gref);
       }
       if (group !== g) return;
@@ -1776,8 +1901,10 @@ main { padding-top: 18px; }
       if (!ms.exists()) {
         const b = await F.getDoc(F.doc(db, "groups/" + g + "/banned/" + myId));
         if (b.exists()) { await removedFromGroup(g, true); return; }
+        const info = { group: g, pub: groupData.publicId || "", name: groupData.name || "this group", approval: !!groupData.approval };
+        if (info.approval && groupOwner !== myId) { needPassword(g, false, info); return; }
         try { await F.setDoc(mref, { pw: pwHash || await pwHashFor(g, ""), joined: Date.now(), nick: myNick }); }
-        catch { needPassword(g, !!pwHash); return; }
+        catch { needPassword(g, !!pwHash, info); return; }
       }
       if (group !== g) return;
       keep(F.onSnapshot(mref, (snap) => { if (!snap.exists() && group === g) removedFromGroup(g); }, () => {}));
@@ -1786,11 +1913,22 @@ main { padding-top: 18px; }
         const renamed = groupData && groupData.name !== snap.data().name;
         groupData = snap.data(); groupOwner = groupData.owner;
         if (renamed) pushCloud(true);
+        syncDirectory();
         render(true);
       }, () => {}));
       if (groupOwner === myId) {
         keep(F.onSnapshot(F.collection(db, "groups/" + g + "/banned"), (snap) => {
           banned = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+          render(true);
+        }, () => {}));
+        if (groupData.publicId) keep(F.onSnapshot(F.collection(db, "directory/" + groupData.publicId + "/requests"), (snap) => {
+          const before = requests.length;
+          requests = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(r => !r.code);
+          if (requests.length > before && before >= 0 && seenReqCount >= 0) {
+            const newest = requests.slice().sort((a, b) => b.at - a.at)[0];
+            if (newest && Date.now() - newest.at < 10 * MIN) news((newest.nick || "Someone") + " asked to join your group.");
+          }
+          if (page === "group") seenReqCount = requests.length;
           render(true);
         }, () => {}));
       }
@@ -1807,16 +1945,15 @@ main { padding-top: 18px; }
     }
   }
 
-  async function joinGroup(code, pw, nick) {
+  async function joinGroup(code, pw) {
     $("joinMsg").textContent = "Joining...";
-    myNick = nick;
     const pwHash = await pwHashFor(code, pw);
     try {
       const gref = F.doc(db, "groups/" + code);
       const gs = await F.getDoc(gref);
       if (!gs.exists()) {
         // A new group: you own it. The password itself is never stored, only a fingerprint of it.
-        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw });
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw, listed: true });
         if (pw) await F.setDoc(F.doc(db, "groups/" + code + "/secret/pw"), { hash: pwHash });
         news("You created a new group. Share the code" + (pw ? " and the password" : "") + " with others.");
       }
@@ -1825,20 +1962,149 @@ main { padding-top: 18px; }
     try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
     await startGroup(pwHash);
     if (group === code && groupState === "ready") {
-      try { await F.setDoc(userDoc(), { group, nick: myNick, updated: Date.now() }); } catch {}
+      await saveProfile({ group, pending: "" });
       $("joinMsg").textContent = ""; $("joinPw").value = "";
     }
   }
 
-  function needPassword(g, triedOne) {
+  function needPassword(g, triedOne, info) {
     stopGroup();
     group = null;
     try { localStorage.removeItem(JOIN_KEY); } catch {}
+    requestFor = info || { group: g, pub: "", name: "this group", approval: false };
     $("joinCode").value = g;
-    $("joinMsg").textContent = triedOne ? "Wrong password for that group." : "That group has a password. Enter it to join.";
+    $("joinMsg").textContent = requestFor.approval ? "That group only takes new members with the owner's approval."
+      : triedOne ? "Wrong password for that group." : "That group has a password. Enter it to join, or ask the owner.";
     render(true);
-    $("joinPw").focus();
+    if (!requestFor.approval) $("joinPw").focus();
   }
+
+  // ---- join requests ----
+  const PENDING_KEY = "dripstone-pending-v1";
+  let pendingUnsubs = [];
+  function stopPending() { for (const u of pendingUnsubs) { try { u(); } catch {} } pendingUnsubs = []; }
+  function setPending(p) {
+    pending = p;
+    try { p ? localStorage.setItem(PENDING_KEY, JSON.stringify(p)) : localStorage.removeItem(PENDING_KEY); } catch {}
+    if (db && myId) saveProfile({ group: group || "", pending: p ? p.pub : "" });
+  }
+
+  // Requests are filed under the group's public id, so people can ask from the rankings without knowing the code.
+  async function askToJoin(pub, name, noteText) {
+    if (!db || !myId || group || pending) return;
+    try {
+      await F.setDoc(F.doc(db, "directory/" + pub + "/requests/" + myId), { nick: myNick, at: Date.now(), note: (noteText || "").trim().slice(0, 120) });
+      requestFor = null; askOpen = null; $("joinMsg").textContent = "";
+      setPending({ pub, name });
+      watchPending();
+      news("Your request to join \u201c" + name + "\u201d was sent.");
+      go("group");
+      render(true);
+    } catch (e) { news("Couldn't send the request (" + (e.code || "error") + ")."); }
+  }
+  $("reqBtn").addEventListener("click", () => {
+    if (!requestFor) return;
+    if (!requestFor.pub) { $("joinMsg").textContent = "This group's owner needs to open the game once before it can take requests."; return; }
+    askToJoin(requestFor.pub, requestFor.name, $("reqNote").value);
+    $("reqNote").value = "";
+  });
+
+  // While waiting: get in as soon as the owner accepts, or hear about it if they decline.
+  function watchPending() {
+    stopPending();
+    if (!pending || !db || !myId || !pending.pub) return;
+    const pub = pending.pub, rref = F.doc(db, "directory/" + pub + "/requests/" + myId);
+    let sawRequest = false;
+    pendingUnsubs.push(F.onSnapshot(rref, async (snap) => {
+      if (!pending || pending.pub !== pub) return;
+      if (!snap.exists()) {
+        if (!sawRequest) return;
+        const name = pending.name;
+        stopPending(); setPending(null);
+        $("joinMsg").textContent = "The owner of \u201c" + name + "\u201d declined your request.";
+        news("Your request to join \u201c" + name + "\u201d was declined.");
+        render(true);
+        return;
+      }
+      sawRequest = true;
+      const code = snap.data().code;
+      if (!code) return;
+      // Accepted: the owner handed over the group's code. Check it really is that group, then go in.
+      try {
+        const gs = await F.getDoc(F.doc(db, "groups/" + code));
+        if (!gs.exists() || gs.data().publicId !== pub) return;
+      } catch { return; }
+      const name = pending.name;
+      stopPending(); setPending(null);
+      group = code;
+      try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick: myNick })); } catch {}
+      await startGroup(null);
+      if (group === code) {
+        await saveProfile({ group, pending: "" });
+        F.deleteDoc(rref).catch(() => {});
+        news("You're in! The owner of \u201c" + name + "\u201d accepted your request.");
+        go("group");
+      }
+    }, () => {}));
+  }
+  async function cancelRequest() {
+    if (!pending) return;
+    const pub = pending.pub;
+    stopPending(); setPending(null);
+    try { await F.deleteDoc(F.doc(db, "directory/" + pub + "/requests/" + myId)); } catch {}
+    $("joinMsg").textContent = "Request cancelled.";
+    render(true);
+  }
+  const dirReq = (uid) => F.doc(db, "directory/" + groupData.publicId + "/requests/" + uid);
+  async function acceptRequest(r) {
+    try {
+      await F.setDoc(F.doc(db, base() + "/members/" + r.id), { pw: "approved", joined: Date.now(), nick: r.nick || "Someone", by: myId });
+      await F.updateDoc(dirReq(r.id), { code: group });
+      news((r.nick || "Someone") + " is now in the group.");
+    } catch (e) { news("Couldn't accept (" + (e.code || "error") + ")."); }
+  }
+  async function declineRequest(r) {
+    if (!confirm("Decline " + (r.nick || "this person") + "'s request?")) return;
+    try { await F.deleteDoc(dirReq(r.id)); }
+    catch (e) { news("Couldn't decline (" + (e.code || "error") + ")."); }
+  }
+  // The owner keeps the group's public listing up to date.
+  let dirSynced = "";
+  async function syncDirectory() {
+    if (!groupData || groupOwner !== myId || !groupData.publicId) return;
+    const key = groupData.publicId + "|" + groupData.name + "|" + (groupData.listed !== false);
+    if (key === dirSynced) return;
+    dirSynced = key;
+    try {
+      await F.setDoc(F.doc(db, "directory/" + groupData.publicId), { owner: myId, name: groupData.name || "A group", open: groupData.listed !== false, updated: Date.now() });
+    } catch {}
+  }
+  $("nickBtn").addEventListener("click", async () => {
+    const nick = $("nickInput").value.replace(/\s+/g, " ").trim().slice(0, 24);
+    if (!nick) { $("nickNote").textContent = "Your name can't be empty."; return; }
+    if (nick === myNick) return;
+    try {
+      await F.setDoc(userDoc(), { nick, nickChangedAt: F.serverTimestamp(), updated: Date.now() }, { merge: true });
+      const snap = await F.getDoc(userDoc());
+      profile = snap.exists() ? snap.data() : profile;
+      myNick = nick; nicks[myId] = nick;
+      try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick })); } catch {}
+      news("You're now called " + nick + ".");
+      if (document.activeElement) document.activeElement.blur();
+      await pushCloud(true);
+      render(true);
+    } catch (e) {
+      $("nickNote").textContent = e.code === "permission-denied" ? "You can only change your name once a week." : "Couldn't change your name (" + (e.code || "error") + ").";
+    }
+  });
+  $("listedToggle").addEventListener("change", async (e) => {
+    try { await F.updateDoc(F.doc(db, base()), { listed: e.target.checked }); }
+    catch (err) { e.target.checked = !e.target.checked; }
+  });
+  $("approvalToggle").addEventListener("change", async (e) => {
+    try { await F.updateDoc(F.doc(db, base()), { approval: e.target.checked }); }
+    catch (err) { e.target.checked = !e.target.checked; $("approvalNote").textContent = "Couldn't change that (" + (err.code || "error") + ")."; }
+  });
 
   async function removedFromGroup(g, knownBan) {
     let wasBanned = !!knownBan;
@@ -1846,7 +2112,7 @@ main { padding-top: 18px; }
     stopGroup();
     group = null;
     try { localStorage.removeItem(JOIN_KEY); } catch {}
-    try { await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
+    await saveProfile({ group: "" });
     $("joinMsg").textContent = wasBanned ? "The owner removed you from \u201c" + g + "\u201d. You can join a different group." : "You left \u201c" + g + "\u201d on another device.";
     news(wasBanned ? "You were removed from a group. Your cave is still yours." : "You're no longer in that group.");
     render(true);
@@ -1858,7 +2124,7 @@ main { padding-top: 18px; }
     stopGroup();
     try { await F.deleteDoc(F.doc(db, "groups/" + g + "/caves/" + myId)); } catch {}
     try { await F.deleteDoc(F.doc(db, "groups/" + g + "/members/" + myId)); } catch {}
-    try { await F.setDoc(userDoc(), { group: "", nick: myNick, updated: Date.now() }); } catch {}
+    await saveProfile({ group: "" });
     try { localStorage.removeItem(JOIN_KEY); } catch {}
     $("joinMsg").textContent = "You left the group. Join another one, or the same one again with its code" + (hadPw ? " and password." : ".");
     pushCloud(true); render(true);
@@ -1909,11 +2175,11 @@ main { padding-top: 18px; }
   });
 
   function disconnect() {
-    stopGroup();
+    stopGroup(); stopPending(); requestFor = null;
     if (saveUnsub) { saveUnsub(); saveUnsub = null; }
     remoteEpoch = 0;
     db = null; myId = null; saveDoc = null; saveLoaded = false;
-    rank = { top: [], now: [], at: 0, error: "" };
+    rank = { top: [], now: [], dir: {}, at: 0, error: "" };
     updateSaveNote(); render(true);
   }
 
@@ -1964,6 +2230,10 @@ main { padding-top: 18px; }
       ]);
       rank.top = a.docs.map(d => Object.assign({ id: d.id }, d.data()));
       rank.now = b.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((x, y) => (y.allTime || 0) - (x.allTime || 0));
+      try {
+        const dir = await F.getDocs(F.query(F.collection(db, "directory"), F.where("open", "==", true), F.limit(300)));
+        rank.dir = {}; for (const d of dir.docs) rank.dir[d.id] = d.data();
+      } catch { rank.dir = {}; }
       rank.error = "";
     } catch (e) { rank.error = e.code || "error"; }
     renderRankings();
