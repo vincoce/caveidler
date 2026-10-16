@@ -113,7 +113,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
   .status > div:first-child { grid-column: 1 / -1; }
 }
 
-:root { --online: #3f9a5a; --bubble: #fffdf6; --bubble-edge: #b9b09c; --bubble-ink: #26313a; --bubble-muted: #6c7680; }
+:root { --fight-bg: #1d2731; --team-a: #d9a368; --team-b: #86ccd2; --online: #3f9a5a; --bubble: #fffdf6; --bubble-edge: #b9b09c; --bubble-ink: #26313a; --bubble-muted: #6c7680; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --online: #7fd39a; } }
 :root[data-theme="dark"] { --online: #7fd39a; }
 .join { grid-template-columns: 1fr 1fr auto; }
@@ -151,6 +151,7 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .rank .sub2 { color: var(--muted); font-size: 0.875rem; font-weight: 400; display: block; }
 .rank .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
 .rank li.me .nm { color: var(--ochre); }
+.rank li.empty { display: block; }
 .namebox { margin-bottom: 26px; }
 .namebox .setrow { margin-top: 0; }
 .request { border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; margin-bottom: 14px; }
@@ -162,6 +163,29 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .bubble text { font-family: "Figtree", system-ui, sans-serif; }
 .bubble-x { cursor: pointer; }
 .bubble-x:focus-visible circle { stroke: var(--water); stroke-width: 2; }
+.mine { border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; margin-bottom: 16px; }
+.mine .big { font: 400 1.6rem/1.2 "Young Serif", Georgia, serif; }
+.mine p { margin: 4px 0 0; color: var(--muted); font-size: 0.925rem; }
+.medal { display: inline-block; min-width: 2.2em; font-weight: 600; color: var(--ochre); }
+.vs { border: 1px solid var(--line); border-radius: 4px; padding: 12px 16px; margin-bottom: 12px; }
+.vs .row { display: grid; grid-template-columns: 9em 1fr auto; gap: 10px; align-items: center; margin-top: 6px; font-size: 0.925rem; }
+.vs .bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.vs .bar span { display: block; height: 100%; background: var(--water); border-radius: 999px; }
+.vs .row.lead .bar span { background: var(--ochre); }
+.vs .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs .t { font-weight: 600; }
+.rules3 .mv, .mvchip { font-weight: 600; }
+.movepick { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px 12px; align-items: center; margin: 10px 0; }
+.movepick .opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.movepick button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+.arena { border-radius: 8px; overflow: hidden; line-height: 0; background: var(--fight-bg); }
+.arena svg { width: 100%; height: auto; display: block; }
+.arena text { font-family: "Figtree", system-ui, sans-serif; }
+.arena .big { font-family: "Young Serif", Georgia, serif; }
+.ribbon { display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--btn-ink); background: var(--ochre); border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: 3px; }
+h3.rec { font: 600 1rem/1.3 "Figtree", system-ui, sans-serif; margin: 18px 0 6px; }
+.vs .m { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
+.wl { font-weight: 600; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.925rem; color: var(--muted); }
 .note-q { color: var(--ink); font-style: italic; }
 
@@ -203,7 +227,7 @@ main { padding-top: 18px; }
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 2px; overflow: visible;
   }
-  .menu a { flex: 1 1 0; text-align: center; padding: 9px 2px; font-size: 0.8rem; border-radius: 10px; }
+  .menu a { flex: 1 1 0; text-align: center; padding: 9px 1px; font-size: 0.72rem; border-radius: 10px; }
   .badge { position: absolute; top: 6px; right: 8px; margin: 0; }
   main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
@@ -218,6 +242,7 @@ main { padding-top: 18px; }
       <a href="#explore" data-page="explore">Explore<span class="badge" id="badgeExplore" hidden></span></a>
       <a href="#group" data-page="group">Group<span class="badge" id="badgeGroup" hidden></span></a>
       <a href="#collection" data-page="collection">Collection</a>
+      <a href="#fight" data-page="fight">Bat fight<span class="badge" id="badgeFight" hidden></span></a>
       <a href="#rankings" data-page="rankings">Rankings</a>
     </nav>
   </div>
@@ -327,6 +352,44 @@ main { padding-top: 18px; }
         </section>
       </div>
     </div>
+  </div>
+
+  <div class="page" data-page="fight" hidden>
+    <div class="cols">
+      <div>
+        <section>
+          <h2>Your bat</h2>
+          <p class="sub" id="fightWhen"></p>
+          <div id="myBat"></div>
+        </section>
+        <section>
+          <h2>How to win</h2>
+          <p class="sub">Every bat brings three moves. In each round, two bats face each other and play their moves one after the other. Each move beats one and loses to one:</p>
+          <ul class="list rules3">
+            <li><span class="mv">Swoop</span> beats <span class="mv">Screech</span>: it dives before the screech lands.</li>
+            <li><span class="mv">Screech</span> beats <span class="mv">Dodge</span>: you can't dodge sound.</li>
+            <li><span class="mv">Dodge</span> beats <span class="mv">Swoop</span>: the diver hits only air.</li>
+          </ul>
+          <p class="sub" style="margin-top:12px">The bat that wins more of the three moves takes the round; a tied round goes to whichever bat the wind favours. Five rounds, and the group with more rounds wins. A team flies at most 5 bats, picked fresh each week. In a small team the same bat flies several rounds, starting its moves one step later each time, so a big group has no advantage, and nobody's cave or calcite plays any part. Nobody sees anyone's moves before the fight, not even their own teammates'.</p>
+        </section>
+      </div>
+      <div>
+        <section>
+          <h2 id="fightTitle">The latest fight</h2>
+          <div id="fightResults"></div>
+          <p class="sub"><button class="link" type="button" id="fightRefresh">Refresh</button></p>
+        </section>
+      </div>
+    </div>
+    <section id="arenaBox" hidden style="margin-top:30px">
+      <div class="arena"><svg id="arena" viewBox="0 0 800 340" role="img" aria-label="Bat fight replay"></svg></div>
+      <div class="acts" style="margin-top:10px">
+        <button class="ghost" type="button" id="replayBtn">Watch again</button>
+        <button class="ghost" type="button" id="skipBtn">Skip to the result</button>
+        <button class="link" type="button" id="closeArena">Close</button>
+      </div>
+      <ol class="rank" id="roundList"></ol>
+    </section>
   </div>
 
   <div class="page" data-page="collection" hidden>
@@ -509,6 +572,12 @@ main { padding-top: 18px; }
 
   const LEGACY_BONUS = 0.10;
   const MAX_GROUP = 10; // the most players a group can ever have
+  // League weeks run Monday 00:00 to Sunday 24:00, UTC.
+  const weekId = (t) => Math.floor((t / DAY + 3) / 7);
+  const weekStart = (id) => (id * 7 - 3) * DAY;
+  // The bat fight: moves can be chosen until Saturday 18:00 UTC; then the fights happen.
+  const FIGHT_AT = 5 * DAY + 18 * HOUR;
+  const fightTime = (w) => weekStart(w) + FIGHT_AT;
   const NEW_CAVE_AT = 1e3; // need a stalagmite before moving on
 
   // Visitors you can unlock and send. "at" is all-time calcite, across every cave you've had.
@@ -725,7 +794,7 @@ main { padding-top: 18px; }
     if (!force && key === minuteKey) return;
     minuteKey = key;
     renderJournal(); renderMove(); renderCollection(); renderVisitors();
-    renderGroup(); renderProject(); renderRankings(); renderAtlas();
+    renderGroup(); renderProject(); renderRankings(); renderAtlas(); renderFight();
     updateBadges();
   }
 
@@ -913,7 +982,9 @@ main { padding-top: 18px; }
     }
     if (groupState !== "ready") { box.appendChild(el("p", "empty", "Opening the group...")); return; }
     const info = el("div", "groupinfo");
-    info.append(el("div", "gname", (groupData && groupData.name) || "Your group"));
+    const gn = el("div", "gname", (groupData && groupData.name) || "Your group");
+    if (wonLatest()) gn.appendChild(el("span", "ribbon", "Bat fight winners"));
+    info.append(gn);
     const online = others.filter(o => isOnline(o.updated)).length;
     const max = groupData.maxMembers || MAX_GROUP, count = typeof groupData.memberCount === "number" ? groupData.memberCount : others.length + 1;
     const p1 = el("p", null, count + " of " + max + " players" + (count <= 1 ? ", so far just you" : "") + (online ? ", " + online + " playing right now" : "") + ".");
@@ -1721,7 +1792,7 @@ main { padding-top: 18px; }
 
 
   // ---------------- pages ----------------
-  const PAGES = ["cave", "explore", "group", "collection", "rankings"];
+  const PAGES = ["cave", "explore", "group", "fight", "collection", "rankings"];
   let page = "cave";
   function showPage(name, noScroll) {
     if (!PAGES.includes(name)) name = "cave";
@@ -1735,6 +1806,8 @@ main { padding-top: 18px; }
     if (name === "explore" && state.lifetime >= NEW_CAVE_AT && !state.choicesSeen) { state.choicesSeen = true; saveLocal(); }
     updateBadges();
     if (name === "rankings") loadRankings(false);
+    if (name === "fight") { if (Date.now() - fight.at > MIN) loadFight(true); fight.seen = fight.week; }
+    if (name !== "fight") stopReplay();
     if (changed && !noScroll) window.scrollTo({ top: 0 });
     render(true);
   }
@@ -1746,6 +1819,8 @@ main { padding-top: 18px; }
   function updateBadges() {
     $("badgeExplore").hidden = !(state.lifetime >= NEW_CAVE_AT && !state.choicesSeen && page !== "explore");
     if (seenGiftCount < 0) seenGiftCount = myGifts.length;
+    // A dot when a new fight has happened that you haven't looked at yet.
+    $("badgeFight").hidden = !(fight.week != null && fight.week !== fight.seen && fight.mine && page !== "fight");
     $("badgeGroup").hidden = !((myGifts.length > seenGiftCount || requests.length > seenReqCount) && page !== "group");
   }
 
@@ -2071,6 +2146,7 @@ main { padding-top: 18px; }
       }
       nicks[myId] = myNick;
       groupState = "ready";
+      setTimeout(() => loadFight(true), 0);
       subscribeGifts(g); subscribeOthers(g); subscribeProject(g); loadSendlog(g);
       await pushCloud(true);
       render(true);
@@ -2407,6 +2483,299 @@ main { padding-top: 18px; }
     updateSaveNote();
   }
 
+  // ---------------- bat fight ----------------
+  // Moves for week w are secret until fightTime(w); after that everyone reads the same frozen moves
+  // and computes the same fights, so no server is needed to run them.
+  const MOVES = ["swoop", "dodge", "screech"];
+  const MOVE_NAME = { swoop: "Swoop", dodge: "Dodge", screech: "Screech" };
+  const BEATS = { swoop: "screech", screech: "dodge", dodge: "swoop" };
+  let fight = { week: null, matches: [], at: 0, error: "", mine: null, seen: null, myPick: null, pickWeek: null, draft: null };
+  const latestFightWeek = (now) => { const w = weekId(now); return now >= fightTime(w) ? w : w - 1; };
+  const pickWeekNow = (now) => weekId(now);
+  const picksOpen = (now) => now < fightTime(weekId(now));
+
+  function simulate(A, B, week) {
+    const r = rng(hashStr(week + ":" + A.pub + ":" + B.pub));
+    const rounds = [];
+    let aw = 0, bw = 0;
+    for (let i = 0; i < 5; i++) {
+      const a = A.bats[i % A.bats.length], b = B.bats[i % B.bats.length];
+      // A bat that flies again starts its sequence one move later, so a repeat is never the same fight.
+      const sa = Math.floor(i / A.bats.length), sb = Math.floor(i / B.bats.length);
+      let ah = 0, bh = 0;
+      const ex = [0, 1, 2].map(k => {
+        const am = a.moves[(k + sa) % 3], bm = b.moves[(k + sb) % 3];
+        const res = am === bm ? "tie" : BEATS[am] === bm ? "a" : "b";
+        if (res === "a") ah++; else if (res === "b") bh++;
+        return { am, bm, res };
+      });
+      const gust = ah === bh;
+      const winner = ah > bh ? "a" : bh > ah ? "b" : (r() < 0.5 ? "a" : "b");
+      if (winner === "a") aw++; else bw++;
+      rounds.push({ a, b, ex, winner, gust });
+    }
+    return { A, B, rounds, aw, bw, winner: aw > bw ? "a" : "b" };
+  }
+  function computeFights(week, bats) {
+    const teams = new Map();
+    for (const b of bats) {
+      if (!b.pub || !Array.isArray(b.moves) || b.moves.length !== 3 || !b.moves.every(m => MOVES.includes(m))) continue;
+      const t = teams.get(b.pub) || { pub: b.pub, name: b.gname || "A group", bats: [], upd: 0 };
+      t.bats.push(b);
+      if ((b.updated || 0) >= t.upd) { t.upd = b.updated || 0; t.name = b.gname || t.name; }
+      teams.set(b.pub, t);
+    }
+    const list = [...teams.values()];
+    for (const t of list) t.bats = t.bats.sort((x, y) => hashStr(x.uid + ":" + week) - hashStr(y.uid + ":" + week)).slice(0, 5);
+    list.sort((x, y) => hashStr(x.pub + ":" + week) - hashStr(y.pub + ":" + week));
+    if (list.length % 2 === 1) {
+      const r = rng(hashStr("wild:" + week));
+      const wild = { pub: "wild", name: "The wild bats", bats: [] };
+      for (let i = 0; i < 3; i++) wild.bats.push({ uid: "wild" + i, nick: ["Old Ragwing", "Little Squeak", "Night Moth"][i], moves: [0, 1, 2].map(() => MOVES[Math.floor(r() * 3)]) });
+      list.push(wild);
+    }
+    const matches = [];
+    for (let i = 0; i + 1 < list.length; i += 2) matches.push(simulate(list[i], list[i + 1], week));
+    return matches;
+  }
+
+  async function loadFight(force) {
+    if (!db || !authUser) return;
+    if (!force && Date.now() - fight.at < 10 * MIN) return;
+    fight.at = Date.now();
+    const now = Date.now(), fw = latestFightWeek(now), pw = pickWeekNow(now);
+    try {
+      const snap = await F.getDocs(F.collection(db, "fights/" + fw + "/bats"));
+      const bats = snap.docs.map(d => Object.assign({ uid: d.id }, d.data()));
+      fight.week = fw;
+      fight.matches = computeFights(fw, bats);
+      const pub = groupData && groupData.publicId;
+      fight.mine = pub ? fight.matches.find(m => m.A.pub === pub || m.B.pub === pub) || null : null;
+      if (fight.seen == null) fight.seen = page === "fight" ? fw : null;
+      fight.error = "";
+    } catch (e) { fight.error = e.code || "error"; }
+    try {
+      const mine = await F.getDoc(F.doc(db, "fights/" + pw + "/bats/" + myId));
+      fight.pickWeek = pw;
+      fight.myPick = mine.exists() ? mine.data() : null;
+    } catch {}
+    render(true);
+  }
+
+  // No spoilers: a fight's result stays hidden until you've watched (or skipped) it on this device.
+  const WATCH_KEY = "dripstone-watched-v1";
+  const fightKey = (m) => fight.week + ":" + m.A.pub + ":" + m.B.pub;
+  let watched = new Set();
+  try { watched = new Set(JSON.parse(localStorage.getItem(WATCH_KEY) || "[]")); } catch {}
+  function markWatched(m) {
+    watched.add(fightKey(m));
+    try { localStorage.setItem(WATCH_KEY, JSON.stringify([...watched].slice(-60))); } catch {}
+  }
+  const seenResult = (m) => watched.has(fightKey(m));
+
+  // Did my group win the latest fight? Only a ribbon for the week, shown once you've watched it.
+  const wonLatest = () => { const m = fight.mine, pub = groupData && groupData.publicId; return !!(m && pub && seenResult(m) && ((m.winner === "a" ? m.A : m.B).pub === pub)); };
+
+  function renderFight() {
+    if (focusInside("myBat")) return;
+    const now = Date.now(), pw = pickWeekNow(now), open = picksOpen(now);
+    $("fightWhen").textContent = open
+      ? "This week's fight is on Saturday at 18:00 UTC, in " + duration((fightTime(pw) - now) / 1000) + ". You can choose or change your moves until then."
+      : "This week's fight has happened. Moves for next week's fight open on Monday, in " + duration((weekStart(pw + 1) - now) / 1000) + ".";
+    const box = $("myBat"); box.textContent = "";
+    const ready = !!(db && authUser);
+    if (!ready) box.appendChild(el("p", "empty", configured ? "Sign in with Google and join a group to send your bat into the fight." : "The bat fight needs online play."));
+    else if (!group || groupState !== "ready") box.appendChild(el("p", "empty", "Join a group first. Your bat fights for your group."));
+    else if (!state.unlocked.bat) box.appendChild(el("p", "empty", "You don't have a bat yet. It unlocks at " + mass(KIND.bat.at) + " all-time calcite."));
+    else if (!open) {
+      const p = fight.myPick && fight.pickWeek === pw ? fight.myPick : null;
+      box.appendChild(el("p", "empty", p ? "Your bat flew this week with " + p.moves.map(m => MOVE_NAME[m]).join(", ") + "." : "Your bat sat this week out."));
+    } else {
+      const saved = fight.myPick && fight.pickWeek === pw ? fight.myPick.moves : null;
+      if (!fight.draft) fight.draft = saved ? saved.slice() : [null, null, null];
+      for (let k = 0; k < 3; k++) {
+        const row = el("div", "movepick");
+        row.appendChild(el("span", "meta", ["First", "Second", "Third"][k] + " move"));
+        const opts = el("div", "opts");
+        for (const m of MOVES) {
+          const b = el("button", "ghost", MOVE_NAME[m]); b.type = "button";
+          b.setAttribute("aria-pressed", String(fight.draft[k] === m));
+          b.addEventListener("click", () => { fight.draft[k] = m; renderFight(); });
+          opts.appendChild(b);
+        }
+        row.appendChild(opts); box.appendChild(row);
+      }
+      const acts = el("div", "acts");
+      const send = el("button", "main", saved ? "Save new moves" : "Send my bat"); send.type = "button";
+      send.disabled = fight.draft.some(m => !m) || (saved && saved.join() === fight.draft.join());
+      send.addEventListener("click", saveMoves);
+      const rnd = el("button", "ghost", "Surprise me"); rnd.type = "button";
+      rnd.addEventListener("click", () => { fight.draft = [0, 1, 2].map(() => MOVES[Math.floor(Math.random() * 3)]); renderFight(); });
+      acts.append(send, rnd);
+      if (saved) { const out = el("button", "link", "Sit this week out"); out.type = "button"; out.addEventListener("click", withdrawBat); acts.appendChild(out); }
+      box.appendChild(acts);
+      box.appendChild(el("p", "empty", saved ? "Your bat is in: " + saved.map(m => MOVE_NAME[m]).join(", ") + "." : "Your bat isn't in this week's fight yet."));
+    }
+
+    // Results
+    const res = $("fightResults"); res.textContent = "";
+    $("fightTitle").textContent = fight.week != null ? "The fight of " + dayStr(fightTime(fight.week)) : "The latest fight";
+    if (!ready) return;
+    if (fight.error) { res.appendChild(el("p", "empty", "Couldn't load the fight (" + fight.error + ").")); return; }
+    if (!fight.at) { res.appendChild(el("p", "empty", "Loading...")); return; }
+    if (!fight.matches.length) { res.appendChild(el("p", "empty", "No fight has happened yet. The first one is on Saturday at 18:00 UTC, as soon as bats from at least one group have entered.")); return; }
+    const pub = groupData && groupData.publicId;
+    const ordered = fight.matches.slice().sort((x, y) => (y === fight.mine) - (x === fight.mine));
+    for (const m of ordered) {
+      const d = el("div", "vs");
+      const win = m.winner === "a" ? m.A : m.B, lose = m.winner === "a" ? m.B : m.A;
+      const t = el("div", "t", m.A.name + " vs " + m.B.name);
+      const seen = seenResult(m);
+      if (m === fight.mine) t.appendChild(el("span", "ribbon", seen && win.pub === pub ? "You won" : "Your fight"));
+      const sizes = m.A.bats.length + " vs " + m.B.bats.length + (m.B.bats.length === 1 && m.A.bats.length === 1 ? " bat." : " bats.");
+      d.append(t, el("div", "m", seen ? win.name + " won " + Math.max(m.aw, m.bw) + " rounds to " + Math.min(m.aw, m.bw) + ". " + sizes : sizes + " Watch it to find out who won."));
+      const b = el("button", "ghost", seen ? "Watch again" : "Watch the fight"); b.type = "button";
+      b.addEventListener("click", () => openReplay(m));
+      const a = el("div", "acts"); a.appendChild(b); d.appendChild(a);
+      res.appendChild(d);
+    }
+    res.appendChild(el("p", "empty", "You can watch these again until next Saturday's fight replaces them."));
+  }
+
+  async function saveMoves() {
+    const pw = pickWeekNow(Date.now());
+    if (!picksOpen(Date.now()) || !groupData || !groupData.publicId || fight.draft.some(m => !m)) return;
+    try {
+      const data = { pub: groupData.publicId, gname: (groupData.name || "A group").slice(0, 32), nick: myNick, moves: fight.draft.slice(), updated: Date.now() };
+      await F.setDoc(F.doc(db, "fights/" + pw + "/bats/" + myId), data);
+      fight.myPick = data; fight.pickWeek = pw;
+      news("Your bat is ready for Saturday's fight.");
+      render(true);
+    } catch (e) { news("Couldn't send your bat (" + (e.code || "error") + ")."); }
+  }
+  async function withdrawBat() {
+    const pw = pickWeekNow(Date.now());
+    try { await F.deleteDoc(F.doc(db, "fights/" + pw + "/bats/" + myId)); fight.myPick = null; fight.draft = null; render(true); }
+    catch (e) { news("Couldn't do that (" + (e.code || "error") + ")."); }
+  }
+
+  $("fightRefresh").addEventListener("click", () => loadFight(true));
+
+  // ---- replay ----
+  let replay = null;
+  function openReplay(m) {
+    $("arenaBox").hidden = false;
+    const list = $("roundList"); list.textContent = "";
+    m.rounds.forEach((r, i) => {
+      const li = el("li");
+      const who = r.winner === "a" ? m.A : m.B;
+      const nm = el("span", "nm", (r.a.nick || "A bat") + " vs " + (r.b.nick || "A bat"));
+      nm.appendChild(el("span", "sub2", r.ex.map(x => MOVE_NAME[x.am] + " / " + MOVE_NAME[x.bm]).join(", ") + (r.gust ? ". A tie, decided by the wind." : "")));
+      li.append(el("span", "pos", "R" + (i + 1)), nm, el("span", "val", who.name));
+      list.appendChild(li);
+    });
+    list.hidden = !seenResult(m);
+    $("arenaBox").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    startReplay(m, reduceMotion);
+  }
+  function stopReplay() { if (replay) { cancelAnimationFrame(replay.raf); replay = null; } }
+  $("closeArena").addEventListener("click", () => { stopReplay(); $("arenaBox").hidden = true; });
+  $("replayBtn").addEventListener("click", () => { if (replay) startReplay(replay.m, false); });
+  $("skipBtn").addEventListener("click", () => { if (replay) { const m = replay.m; startReplay(m, true); } });
+
+  const ROUND = 5.6, INTRO = 1.0, EXCH = 1.4, OUTRO = 0.4; // seconds
+  function batShape(svg, color) {
+    const g = svgEl(svg, "g", {});
+    const wings = svgEl(g, "g", {});
+    const wing = "M0 0 C-8 -12 -20 -16 -32 -10 C-26 -4 -24 2 -28 6 C-20 2 -14 4 -10 8 C-6 4 -2 4 0 2 Z";
+    svgEl(wings, "path", { d: wing, fill: color });
+    svgEl(wings, "path", { d: wing, fill: color, transform: "scale(-1 1)" });
+    svgEl(g, "ellipse", { cx: 0, cy: 1, rx: 5, ry: 8, fill: color });
+    svgEl(g, "circle", { cx: 0, cy: -7, r: 4, fill: color });
+    svgEl(g, "path", { d: "M-3.5 -9 L-4 -15 L-1 -10 Z M3.5 -9 L4 -15 L1 -10 Z", fill: color });
+    svgEl(g, "circle", { cx: -1.6, cy: -7.5, r: 0.9, fill: "#1b1b1b" });
+    svgEl(g, "circle", { cx: 1.6, cy: -7.5, r: 0.9, fill: "#1b1b1b" });
+    return { g, wings };
+  }
+  function startReplay(m, toEnd) {
+    stopReplay();
+    const svg = $("arena"); svg.textContent = "";
+    // a little cave to fight in
+    svgEl(svg, "rect", { x: 0, y: 0, width: 800, height: 340, fill: "var(--fight-bg)" });
+    svgEl(svg, "path", { d: "M0 0 H800 V40 C700 60 620 30 520 46 C420 62 330 34 230 50 C140 64 70 36 0 52 Z", fill: "#2e3b45" });
+    svgEl(svg, "path", { d: "M0 340 H800 V300 C700 288 600 310 500 300 C400 292 300 312 200 302 C120 294 60 310 0 300 Z", fill: "#2e3b45" });
+    const txt = (x, y, size, fill, anchor, cls) => { const t = svgEl(svg, "text", { x, y, "font-size": size, fill, "text-anchor": anchor || "middle" }); if (cls) t.setAttribute("class", cls); return t; };
+    const nameA = txt(170, 84, 15, "var(--team-a)", "middle"), nameB = txt(630, 84, 15, "var(--team-b)", "middle");
+    nameA.textContent = m.A.name; nameB.textContent = m.B.name;
+    const score = txt(400, 86, 26, "#e4ded1", "middle", "big");
+    const batA = txt(250, 270, 13, "#93a0aa"), batB = txt(550, 270, 13, "#93a0aa");
+    const caption = txt(400, 300, 15, "#e4ded1");
+    const roundT = txt(400, 120, 13, "#93a0aa");
+    const ringsA = svgEl(svg, "g", {}), ringsB = svgEl(svg, "g", {});
+    const A = batShape(svg, "var(--team-a)"), B = batShape(svg, "var(--team-b)");
+    const total = m.rounds.length * ROUND + 2.5;
+    const t0 = performance.now() - (toEnd ? total * 1000 : 0);
+    replay = { m, raf: 0 };
+    const HOME = { a: [250, 190], b: [550, 190] };
+    function pose(side, move, p, lost) {
+      const dir = side === "a" ? 1 : -1, [hx, hy] = HOME[side];
+      let x = hx, y = hy, rot = 0;
+      if (move === "swoop") { x = hx + dir * Math.sin(Math.PI * p) * 120; y = hy + Math.sin(Math.PI * p) * 45; }
+      else if (move === "dodge") { x = hx - dir * Math.sin(Math.PI * p) * 35; y = hy - Math.sin(Math.PI * p) * 70; }
+      else if (move === "screech") { y = hy + Math.sin(p * Math.PI * 6) * 3; }
+      if (lost && p > 0.55) rot = Math.sin((p - 0.55) * 40) * 18 * (1 - p);
+      return { x, y, rot };
+    }
+    function rings(gr, side, p, on) {
+      gr.textContent = "";
+      if (!on) return;
+      const [hx, hy] = HOME[side], dir = side === "a" ? 1 : -1;
+      for (let i = 0; i < 3; i++) {
+        const f = (p * 2 + i / 3) % 1;
+        svgEl(gr, "path", { d: `M${hx + dir * (14 + f * 140)} ${hy - 30 * f - 8} Q${hx + dir * (24 + f * 150)} ${hy} ${hx + dir * (14 + f * 140)} ${hy + 30 * f + 8}`, fill: "none", stroke: side === "a" ? "var(--team-a)" : "var(--team-b)", "stroke-width": 2.5, opacity: (1 - f) * 0.9 });
+      }
+    }
+    function frame(tm) {
+      const t = (tm - t0) / 1000;
+      let aw = 0, bw = 0;
+      const ri = Math.min(m.rounds.length - 1, Math.floor(t / ROUND));
+      for (let i = 0; i < m.rounds.length; i++) if (t >= (i + 1) * ROUND - OUTRO) { if (m.rounds[i].winner === "a") aw++; else bw++; }
+      score.textContent = aw + " : " + bw;
+      const done = t >= m.rounds.length * ROUND;
+      const flap = Math.sin(tm / 45);
+      let pa = { x: HOME.a[0], y: HOME.a[1], rot: 0 }, pb = { x: HOME.b[0], y: HOME.b[1], rot: 0 };
+      let ra = false, rb = false, rp = 0;
+      if (!done) {
+        const r = m.rounds[ri], lt = t - ri * ROUND;
+        roundT.textContent = "Round " + (ri + 1) + " of " + m.rounds.length;
+        batA.textContent = r.a.nick || "A bat"; batB.textContent = r.b.nick || "A bat";
+        if (lt < INTRO) caption.textContent = (r.a.nick || "A bat") + " faces " + (r.b.nick || "a bat");
+        else if (lt < INTRO + 3 * EXCH) {
+          const k = Math.floor((lt - INTRO) / EXCH), p = (lt - INTRO - k * EXCH) / EXCH, x = r.ex[k];
+          pa = pose("a", x.am, p, x.res === "b"); pb = pose("b", x.bm, p, x.res === "a");
+          ra = x.am === "screech"; rb = x.bm === "screech"; rp = p;
+          caption.textContent = p < 0.45 ? MOVE_NAME[x.am] + " against " + MOVE_NAME[x.bm] : x.res === "tie" ? "Both " + MOVE_NAME[x.am].toLowerCase() + ". No hit." : MOVE_NAME[x.res === "a" ? x.am : x.bm] + " wins!";
+        } else caption.textContent = (r.winner === "a" ? r.a.nick : r.b.nick) + " takes the round" + (r.gust ? ", helped by the wind" : "") + ".";
+      } else {
+        const w = m.winner === "a" ? m.A : m.B;
+        roundT.textContent = "Final";
+        caption.textContent = w.name + " win the fight!";
+        batA.textContent = ""; batB.textContent = "";
+        const jump = Math.abs(Math.sin(t * 4)) * 14;
+        if (m.winner === "a") pa.y -= jump; else pb.y -= jump;
+      }
+      rings(ringsA, "a", rp, ra); rings(ringsB, "b", rp, rb);
+      A.g.setAttribute("transform", `translate(${pa.x} ${pa.y}) rotate(${pa.rot}) scale(1.6)`);
+      B.g.setAttribute("transform", `translate(${pb.x} ${pb.y}) rotate(${pb.rot}) scale(-1.6 1.6)`);
+      A.wings.setAttribute("transform", `scale(1 ${reduceMotion ? 1 : flap.toFixed(2)})`);
+      B.wings.setAttribute("transform", `scale(1 ${reduceMotion ? 1 : (-flap).toFixed(2)})`);
+      if (t < total && replay) replay.raf = requestAnimationFrame(frame);
+      else if (replay && !seenResult(m)) { markWatched(m); $("roundList").hidden = false; render(true); }
+      else $("roundList").hidden = false;
+    }
+    replay.raf = requestAnimationFrame(frame);
+  }
+
   async function loadRankings(force) {
     if (!db || !authUser) return;
     if (!force && Date.now() - rank.at < 5 * MIN) return;
@@ -2465,7 +2834,7 @@ main { padding-top: 18px; }
   saveLocal();
   requestAnimationFrame(frame);
   setInterval(() => { advance(Date.now()); render(false); }, 1000);
-  setInterval(() => { saveLocal(); if (!document.hidden) pushCloud(false); loadRankings(false); }, 10000);
+  setInterval(() => { saveLocal(); if (!document.hidden) pushCloud(false); loadRankings(false); loadFight(false); }, 10000);
   loadConfig();
 })();
 </script>
