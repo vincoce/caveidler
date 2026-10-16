@@ -136,6 +136,7 @@ button:focus-visible { outline: 2px solid var(--water); outline-offset: 3px; }
 details.owner { border: 1px solid var(--line); border-radius: 4px; padding: 10px 16px; margin-bottom: 14px; }
 details.owner summary { cursor: pointer; font-weight: 600; }
 .setrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; margin-top: 12px; }
+.setrow select { font: 400 0.95rem/1.2 "Figtree", system-ui, sans-serif; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; justify-self: start; }
 .setrow label { display: grid; gap: 4px; font-size: 0.875rem; color: var(--muted); }
 .setrow + p { margin: 6px 0 0; }
 .project { border-radius: 6px; overflow: hidden; line-height: 0; margin: 4px 0 12px; }
@@ -297,6 +298,8 @@ main { padding-top: 18px; }
           <p class="empty" id="renameNote"></p>
           <div class="setrow"><label>Password<input id="pwInput" type="password" autocomplete="new-password" maxlength="64" placeholder="leave empty to remove it"></label><button class="ghost" id="pwBtn" type="button">Save password</button></div>
           <p class="empty" id="pwNote">People already in the group stay in. The password is only asked from new members.</p>
+          <div class="setrow"><label>Most players allowed<select id="maxSel"></select></label></div>
+          <p class="empty" id="maxNote">Up to 10. Lowering it never removes anyone; it only stops new people from joining.</p>
           <label class="check" style="margin-top:14px"><input type="checkbox" id="listedToggle"> Let people ask to join from the Groups tab in Rankings</label>
           <label class="check" style="margin-top:8px"><input type="checkbox" id="approvalToggle"> New members need my approval</label>
           <p class="empty" id="approvalNote">When this is on, nobody can join with the code or password alone. They send a request, and you accept or decline it here.</p>
@@ -505,6 +508,7 @@ main { padding-top: 18px; }
   ];
 
   const LEGACY_BONUS = 0.10;
+  const MAX_GROUP = 10; // the most players a group can ever have
   const NEW_CAVE_AT = 1e3; // need a stalagmite before moving on
 
   // Visitors you can unlock and send. "at" is all-time calcite, across every cave you've had.
@@ -911,14 +915,35 @@ main { padding-top: 18px; }
     const info = el("div", "groupinfo");
     info.append(el("div", "gname", (groupData && groupData.name) || "Your group"));
     const online = others.filter(o => isOnline(o.updated)).length;
-    const p1 = el("p", null, (others.length + 1) + (others.length ? " players" : " player, so far just you") + (online ? ", " + online + " playing right now" : "") + ".");
+    const max = groupData.maxMembers || MAX_GROUP, count = typeof groupData.memberCount === "number" ? groupData.memberCount : others.length + 1;
+    const p1 = el("p", null, count + " of " + max + " players" + (count <= 1 ? ", so far just you" : "") + (online ? ", " + online + " playing right now" : "") + ".");
     const p2 = el("p", null, "Group code: " + group + ". Share it" + (groupData && groupData.hasPw ? " together with the password" : "") + " with people you want to invite. " + (groupOwner === myId ? "You own this group." : "Owner: " + nameOf(groupOwner) + "."));
     const p3 = el("p", null, "You play as " + myNick + (authUser.email ? ", signed in as " + authUser.email : "") + ". ");
     const leave = el("button", "link", "Leave group"); leave.type = "button";
-    leave.addEventListener("click", () => { if (confirm("Leave this group? Your cave stays with your account. Visitors sent to you in this group stay here in case you come back.")) leaveGroup(); });
+    leave.addEventListener("click", () => {
+      if (groupOwner === myId && others.length) { leaving = true; render(true); return; }
+      const extra = groupOwner === myId ? " You're the only one here, so the group waits empty, and you stay its owner if you come back." : "";
+      if (confirm("Leave this group? Your cave stays with your account. Visitors sent to you in this group stay here in case you come back." + extra)) leaveGroup();
+    });
     const out = el("button", "link", "Sign out"); out.type = "button"; out.addEventListener("click", signOutClick);
     p3.append(leave, " ", out);
     info.append(p1, p2, p3);
+    if (leaving && groupOwner === myId && others.length) {
+      // The owner can't just walk away: someone has to look after requests and settings.
+      const h = el("div", "request");
+      h.style.marginTop = "12px";
+      h.appendChild(el("p", null, "You own this group. Before you leave, choose who takes over. They'll manage requests, settings and members."));
+      const row = el("div", "acts");
+      const sel = el("select"); sel.setAttribute("aria-label", "New owner");
+      for (const o of others) { const op = el("option", null, nameOf(o.id)); op.value = o.id; sel.appendChild(op); }
+      const go2 = el("button", "ghost", "Hand over and leave"); go2.type = "button";
+      go2.addEventListener("click", () => leaveAsOwner(sel.value));
+      const cancel = el("button", "link", "Stay"); cancel.type = "button";
+      cancel.addEventListener("click", () => { leaving = false; render(true); });
+      row.append(sel, go2, cancel);
+      h.appendChild(row);
+      info.appendChild(h);
+    }
     box.appendChild(info);
   }
 
@@ -963,6 +988,8 @@ main { padding-top: 18px; }
     if (!(group && groupOwner === myId && groupState === "ready" && requests.length)) return;
     const wrap = el("div", "reqs");
     wrap.appendChild(el("h3", null, requests.length === 1 ? "1 person wants to join" : requests.length + " people want to join"));
+    const full = (groupData.memberCount || 0) >= (groupData.maxMembers || MAX_GROUP);
+    if (full) wrap.appendChild(el("p", "empty", "The group is full (" + groupData.memberCount + " of " + (groupData.maxMembers || MAX_GROUP) + "). Raise the limit in Group settings or remove someone before accepting."));
     const ul = el("ul", "list");
     for (const r of requests.slice().sort((a, b) => a.at - b.at)) {
       const li = el("li");
@@ -970,6 +997,7 @@ main { padding-top: 18px; }
       if (r.note) { const m = el("div", "meta"); m.appendChild(el("span", "note-q", "\u201c" + r.note + "\u201d")); li.appendChild(m); }
       const acts = el("div", "acts");
       const yes = el("button", "ghost", "Accept"); yes.type = "button"; yes.addEventListener("click", () => acceptRequest(r));
+      yes.disabled = full;
       const no = el("button", "link", "Decline"); no.type = "button"; no.addEventListener("click", () => declineRequest(r));
       acts.append(yes, no);
       li.appendChild(acts);
@@ -984,6 +1012,8 @@ main { padding-top: 18px; }
     if (!focusInside("ownerBox") && $("renameInput").value === "") $("renameInput").value = groupData.name || "";
     $("approvalToggle").checked = !!groupData.approval;
     $("listedToggle").checked = groupData.listed !== false;
+    if (!$("maxSel").options.length) for (let n = 2; n <= MAX_GROUP; n++) { const o = el("option", null, String(n)); o.value = n; $("maxSel").appendChild(o); }
+    if (!focusInside("ownerBox")) $("maxSel").value = String(groupData.maxMembers || MAX_GROUP);
     const ra = groupData.renamedAt && groupData.renamedAt.toMillis ? groupData.renamedAt.toMillis() : 0;
     const next = ra + 7 * DAY;
     if (ra && next > Date.now()) {
@@ -1039,7 +1069,9 @@ main { padding-top: 18px; }
       if (groupOwner === myId) {
         const kick = el("button", "link", "Remove from group"); kick.type = "button";
         kick.addEventListener("click", () => removePlayer(o));
-        const k2 = el("div", "acts"); k2.appendChild(kick); li.appendChild(k2);
+        const own = el("button", "link", "Make owner"); own.type = "button";
+        own.addEventListener("click", () => makeOwner(o));
+        const k2 = el("div", "acts"); k2.append(own, kick); li.appendChild(k2);
       }
       ul.appendChild(li);
     }
@@ -1161,6 +1193,7 @@ main { padding-top: 18px; }
         row(i + 1 + ".", (rank.dir[g.pub] && rank.dir[g.pub].name) || g.name, g.members + (g.members === 1 ? " player" : " players") + (g.project ? ", column " + mass(g.project) : ""), mass(g.total), g.mine);
         const d = rank.dir[g.pub];
         if (!d || !d.open || g.mine || !canAsk) return;
+        if (d.full) { ul.lastChild.appendChild(el("div", "askrow meta", "Full")); return; }
         const li = ul.lastChild;
         const box = el("div", "askrow");
         if (askOpen === g.pub) {
@@ -1956,7 +1989,7 @@ main { padding-top: 18px; }
     for (const u of unsubs) { try { u(); } catch {} }
     unsubs = [];
     if (visiting) goHome();
-    myGifts = []; others = []; banned = []; requests = []; project = null;
+    myGifts = []; others = []; banned = []; requests = []; project = null; leaving = false;
     groupData = null; groupOwner = null; groupState = "none";
   }
 
@@ -1969,7 +2002,7 @@ main { padding-top: 18px; }
       let gs = await F.getDoc(gref);
       if (!gs.exists()) {
         // A group from an old version without an owner yet: whoever opens it first owns it.
-        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: false, listed: true });
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: false, listed: true, memberCount: 0, maxMembers: MAX_GROUP });
         gs = await F.getDoc(gref);
       }
       if (group !== g) return;
@@ -1977,6 +2010,14 @@ main { padding-top: 18px; }
       if (groupOwner === myId && !groupData.publicId) {
         try { await F.updateDoc(gref, { publicId: randomId(), name: groupData.name || randomGroupName(), hasPw: false }); } catch {}
       }
+      // Groups from older versions don't know how many members they have yet; the owner counts once.
+      if (groupOwner === myId && typeof groupData.memberCount !== "number") {
+        try {
+          const ms0 = await F.getDocs(F.collection(db, "groups/" + g + "/members"));
+          await F.updateDoc(gref, { memberCount: ms0.docs.length, maxMembers: MAX_GROUP });
+        } catch {}
+      }
+      gs = await F.getDoc(gref); groupData = gs.data(); groupOwner = groupData.owner;
       // Membership: needs the password if the group has one.
       const mref = F.doc(db, "groups/" + g + "/members/" + myId);
       const ms = await F.getDoc(mref);
@@ -1985,7 +2026,15 @@ main { padding-top: 18px; }
         if (b.exists()) { await removedFromGroup(g, true); return; }
         const info = { group: g, pub: groupData.publicId || "", name: groupData.name || "this group", approval: !!groupData.approval };
         if (info.approval && groupOwner !== myId) { needPassword(g, false, info); return; }
-        try { await F.setDoc(mref, { pw: pwHash || await pwHashFor(g, ""), joined: Date.now(), nick: myNick }); }
+        if (typeof groupData.memberCount !== "number") { groupFull(g, "This group's owner needs to open the game once before new people can join."); return; }
+        if (groupData.memberCount >= (groupData.maxMembers || MAX_GROUP)) { groupFull(g, "\u201c" + info.name + "\u201d is full (" + groupData.memberCount + " of " + (groupData.maxMembers || MAX_GROUP) + " players)."); return; }
+        try {
+          // Joining and counting happen together, so the limit can't be passed.
+          const batch = F.writeBatch(db);
+          batch.set(mref, { pw: pwHash || await pwHashFor(g, ""), joined: Date.now(), nick: myNick });
+          batch.update(gref, { memberCount: F.increment(1), countBy: myId });
+          await batch.commit();
+        }
         catch { needPassword(g, !!pwHash, info); return; }
       }
       if (group !== g) return;
@@ -1993,7 +2042,13 @@ main { padding-top: 18px; }
       keep(F.onSnapshot(gref, (snap) => {
         if (!snap.exists() || group !== g) return;
         const renamed = groupData && groupData.name !== snap.data().name;
+        const ownerChanged = groupData && groupData.owner !== snap.data().owner;
         groupData = snap.data(); groupOwner = groupData.owner;
+        if (ownerChanged) {
+          if (groupOwner === myId) news("You're now the owner of \u201c" + groupData.name + "\u201d.");
+          startGroup(null); // owner-only lists (requests, removed players) start or stop
+          return;
+        }
         if (renamed) pushCloud(true);
         syncDirectory();
         render(true);
@@ -2035,7 +2090,7 @@ main { padding-top: 18px; }
       const gs = await F.getDoc(gref);
       if (!gs.exists()) {
         // A new group: you own it. The password itself is never stored, only a fingerprint of it.
-        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw, listed: true });
+        await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw, listed: true, memberCount: 0, maxMembers: MAX_GROUP });
         if (pw) await F.setDoc(F.doc(db, "groups/" + code + "/secret/pw"), { hash: pwHash });
         news("You created a new group. Share the code" + (pw ? " and the password" : "") + " with others.");
       }
@@ -2047,6 +2102,16 @@ main { padding-top: 18px; }
       await saveProfile({ group, pending: "" });
       $("joinMsg").textContent = ""; $("joinPw").value = "";
     }
+  }
+
+  function groupFull(g, msg) {
+    stopGroup();
+    group = null;
+    try { localStorage.removeItem(JOIN_KEY); } catch {}
+    requestFor = null;
+    $("joinCode").value = g;
+    $("joinMsg").textContent = msg;
+    render(true);
   }
 
   function needPassword(g, triedOne, info) {
@@ -2140,7 +2205,11 @@ main { padding-top: 18px; }
   const dirReq = (uid) => F.doc(db, "directory/" + groupData.publicId + "/requests/" + uid);
   async function acceptRequest(r) {
     try {
-      await F.setDoc(F.doc(db, base() + "/members/" + r.id), { pw: "approved", joined: Date.now(), nick: r.nick || "Someone", by: myId });
+      if ((groupData.memberCount || 0) >= (groupData.maxMembers || MAX_GROUP)) { news("The group is full. Raise the limit or remove someone first."); return; }
+      const batch = F.writeBatch(db);
+      batch.set(F.doc(db, base() + "/members/" + r.id), { pw: "approved", joined: Date.now(), nick: r.nick || "Someone", by: myId });
+      batch.update(F.doc(db, base()), { memberCount: F.increment(1), countBy: r.id });
+      await batch.commit();
       await F.updateDoc(dirReq(r.id), { code: group });
       news((r.nick || "Someone") + " is now in the group.");
     } catch (e) { news("Couldn't accept (" + (e.code || "error") + ")."); }
@@ -2154,11 +2223,12 @@ main { padding-top: 18px; }
   let dirSynced = "";
   async function syncDirectory() {
     if (!groupData || groupOwner !== myId || !groupData.publicId) return;
-    const key = groupData.publicId + "|" + groupData.name + "|" + (groupData.listed !== false);
+    const full = (groupData.memberCount || 0) >= (groupData.maxMembers || MAX_GROUP);
+    const key = groupData.publicId + "|" + groupData.name + "|" + (groupData.listed !== false) + "|" + full;
     if (key === dirSynced) return;
     dirSynced = key;
     try {
-      await F.setDoc(F.doc(db, "directory/" + groupData.publicId), { owner: myId, name: groupData.name || "A group", open: groupData.listed !== false, updated: Date.now() });
+      await F.setDoc(F.doc(db, "directory/" + groupData.publicId), { owner: myId, name: groupData.name || "A group", open: groupData.listed !== false, full, updated: Date.now() });
     } catch {}
   }
   $("nickBtn").addEventListener("click", async () => {
@@ -2178,6 +2248,12 @@ main { padding-top: 18px; }
     } catch (e) {
       $("nickNote").textContent = e.code === "permission-denied" ? "You can only change your name once a week." : "Couldn't change your name (" + (e.code || "error") + ").";
     }
+  });
+  $("maxSel").addEventListener("change", async (e) => {
+    const n = Number(e.target.value);
+    try { await F.updateDoc(F.doc(db, base()), { maxMembers: n }); $("maxNote").textContent = "Limit set to " + n + " players." + ((groupData.memberCount || 0) > n ? " Nobody is removed; new people just can't join until there's room." : ""); }
+    catch (err) { $("maxNote").textContent = "Couldn't change the limit (" + (err.code || "error") + ")."; }
+    if (document.activeElement) document.activeElement.blur();
   });
   $("listedToggle").addEventListener("change", async (e) => {
     try { await F.updateDoc(F.doc(db, base()), { listed: e.target.checked }); }
@@ -2205,11 +2281,38 @@ main { padding-top: 18px; }
     group = null;
     stopGroup();
     try { await F.deleteDoc(F.doc(db, "groups/" + g + "/caves/" + myId)); } catch {}
-    try { await F.deleteDoc(F.doc(db, "groups/" + g + "/members/" + myId)); } catch {}
+    try {
+      const batch = F.writeBatch(db);
+      batch.delete(F.doc(db, "groups/" + g + "/members/" + myId));
+      batch.update(F.doc(db, "groups/" + g), { memberCount: F.increment(-1), countBy: myId });
+      await batch.commit();
+    } catch { try { await F.deleteDoc(F.doc(db, "groups/" + g + "/members/" + myId)); } catch {} }
     await saveProfile({ group: "" });
     try { localStorage.removeItem(JOIN_KEY); } catch {}
     $("joinMsg").textContent = "You left the group. Join another one, or the same one again with its code" + (hadPw ? " and password." : ".");
     pushCloud(true); render(true);
+  }
+
+  // The owner passes the group on: the public listing first, then the group itself.
+  async function handOver(o) {
+    if (groupOwner !== myId) return false;
+    try {
+      if (groupData.publicId) { try { await F.updateDoc(F.doc(db, "directory/" + groupData.publicId), { owner: o.id, updated: Date.now() }); } catch {} }
+      await F.updateDoc(F.doc(db, base()), { owner: o.id });
+      news(nameOf(o.id) + " is now the owner of the group.");
+      return true;
+    } catch (e) { news("Couldn't hand over the group (" + (e.code || "error") + ")."); return false; }
+  }
+  async function makeOwner(o) {
+    if (!confirm("Make " + nameOf(o.id) + " the owner? They'll manage requests, settings and members, and you become a normal member.")) return;
+    await handOver(o);
+  }
+  let leaving = false;
+  async function leaveAsOwner(newOwnerId) {
+    const o = others.find(x => x.id === newOwnerId);
+    if (!o) return;
+    if (!confirm("Hand the group over to " + nameOf(o.id) + " and leave?")) return;
+    if (await handOver(o)) { leaving = false; await leaveGroup(); }
   }
 
   async function removePlayer(o) {
@@ -2217,7 +2320,10 @@ main { padding-top: 18px; }
     if (!confirm("Remove " + nameOf(o.id) + " from this group? They can't rejoin unless you let them back in.")) return;
     try {
       await F.setDoc(F.doc(db, base() + "/banned/" + o.id), { by: myId, at: Date.now(), nick: o.nick || nameOf(o.id) });
-      await F.deleteDoc(F.doc(db, base() + "/members/" + o.id));
+      const batch = F.writeBatch(db);
+      batch.delete(F.doc(db, base() + "/members/" + o.id));
+      batch.update(F.doc(db, base()), { memberCount: F.increment(-1), countBy: o.id });
+      await batch.commit();
       await F.deleteDoc(F.doc(db, base() + "/caves/" + o.id));
       const gs = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", o.id)));
       await Promise.all(gs.docs.map(d => F.deleteDoc(d.ref)));
