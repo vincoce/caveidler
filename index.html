@@ -908,6 +908,7 @@ main { padding-top: 18px; }
       const act = Math.min(k.cap, gs.filter(g => isActive(g, now)).length);
       const li = el("li");
       li.append(el("div", "who", gs.length + " " + (gs.length === 1 ? k.name.toLowerCase() : k.plural)));
+      if (gs.length > 2) li.append(el("div", "meta", "Only a few show in the cave at once, so it doesn't get crowded. All of them count."));
       const senders = [...new Set(gs.map(g => nameOf(g.from, g.fromNick)))].join(", ");
       const e = k.eff, per = e.drips || e.drop || e.both;
       li.append(el("div", "meta", "From " + senders + ". Newest: " + giftStatus(gs[0], now) + "."));
@@ -1468,17 +1469,38 @@ main { padding-top: 18px; }
     // Messages show as speech bubbles, only in your own cave, newest three that you haven't closed.
     const noted = visiting ? [] : gifts.filter(x => x.note && x.from && !state.hiddenNotes.includes(x.id)).sort((a, b) => b.sentAt - a.sentAt).slice(0, 3);
     const spots = [];
-    const order = ["ammonite", "painting", "glow", "spider", "bat", "geode", "olm", "fox", "deer", "bear", "dragon", "caver"];
-    for (const kind of order) {
-      for (const it of gifts.filter(x => x.kind === kind).slice(-12)) {
+    // Keep the cave tidy: only a few of each kind are drawn (all of them still count for bonuses),
+    // and anything that would sit on top of another visitor is left out.
+    const SHOW_MAX = { bat: 4, spider: 2, glow: 2, deer: 2, ammonite: 3, fox: 2, olm: 2, caver: 2, geode: 2, painting: 3, bear: 1, dragon: 1 };
+    const zOrder = ["ammonite", "painting", "glow", "spider", "bat", "geode", "olm", "fox", "deer", "bear", "dragon", "caver"];
+    const priority = ["dragon", "bear", "caver", "deer", "fox", "olm", "geode", "bat", "spider", "painting", "ammonite", "glow"];
+    const drawn = [];
+    for (const kind of zOrder) {
+      // Messages first, then your own unlocked one, then the newest.
+      const pool = gifts.filter(x => x.kind === kind).sort((a, b) =>
+        (noted.includes(b) - noted.includes(a)) || ((!b.from) - (!a.from)) || (b.sentAt - a.sentAt));
+      for (const it of pool.slice(0, SHOW_MAX[kind] || 2)) {
         const grp = svgEl(g, "g", {});
         const t = document.createElementNS(NS, "title");
         t.textContent = KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "");
         grp.appendChild(t);
         DRAW[kind](grp, cave, it, rng(hashStr(it.id)), now);
-        if (noted.includes(it)) spots.push({ it, grp });
+        let bb = null; try { bb = grp.getBBox(); } catch {}
+        drawn.push({ it, kind, grp, bb: bb && bb.width ? bb : null, noted: noted.includes(it) });
       }
     }
+    const kept = [];
+    const overlaps = (a, b) => {
+      const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x), h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (w <= 0 || h <= 0) return false;
+      return w * h > 0.3 * Math.min(a.width * a.height, b.width * b.height);
+    };
+    const rank = (d) => (d.noted ? -100 : 0) + priority.indexOf(d.kind);
+    for (const d of drawn.slice().sort((a, b) => rank(a) - rank(b))) {
+      if (d.bb && !d.noted && kept.some(k => k.bb && overlaps(k.bb, d.bb))) { d.grp.remove(); if (d.kind === "bat") roosts.delete(d.it.id); continue; }
+      kept.push(d);
+    }
+    for (const d of drawn) if (d.noted && d.grp.isConnected) spots.push({ it: d.it, grp: d.grp });
     drawBubbles(spots);
   }
 
