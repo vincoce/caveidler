@@ -197,6 +197,7 @@ h3.rec { font: 600 1rem/1.3 "Figtree", system-ui, sans-serif; margin: 18px 0 6px
 .wl { font-weight: 600; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.925rem; color: var(--muted); }
 .note-q { color: var(--ink); font-style: italic; }
+.censor { color: #0b0b0b; background: #0b0b0b; letter-spacing: -1px; user-select: none; }
 
 /* ---- menu and pages ---- */
 .top {
@@ -661,7 +662,8 @@ main { padding-top: 18px; }
     choices: null,                    // the caves on offer when moving on
     choicesSeen: false,               // has the player looked at them yet
     public: prev ? prev.public : true, // listed in the rankings
-    hiddenNotes: prev ? prev.hiddenNotes : [] // messages you closed
+    hiddenNotes: prev ? prev.hiddenNotes : [], // messages you closed
+    censored: prev ? prev.censored : []        // visitors that arrived before you'd unlocked their kind
   });
 
   function normalise(s) {
@@ -689,7 +691,8 @@ main { padding-top: 18px; }
       choices: choices && choices.length ? choices : null,
       choicesSeen: !!s.choicesSeen,
       public: s.public !== false,
-      hiddenNotes: Array.isArray(s.hiddenNotes) ? s.hiddenNotes.filter(x => typeof x === "string").slice(-300) : []
+      hiddenNotes: Array.isArray(s.hiddenNotes) ? s.hiddenNotes.filter(x => typeof x === "string").slice(-300) : [],
+      censored: Array.isArray(s.censored) ? s.censored.filter(x => typeof x === "string").slice(-300) : []
     };
   }
   function loadLocal() { try { const raw = localStorage.getItem(KEY); return raw ? normalise(JSON.parse(raw)) : null; } catch { return null; } }
@@ -697,6 +700,10 @@ main { padding-top: 18px; }
 
   let state = loadLocal() || freshCave();
   let myGifts = [];         // visitors sent to me in the current group
+  // No spoilers: a visitor of a kind you haven't unlocked yourself shows up censored (a black box, and its
+  // message blacked out). It doesn't count for bonuses until you unlock that kind; then it's revealed.
+  const known = (g) => !!state.unlocked[g.kind];
+  const knownGifts = () => myGifts.filter(known);
   let project = null;       // the group's project document
   let myId = null, db = null, canWrite = false;
   let visiting = null;
@@ -709,7 +716,7 @@ main { padding-top: 18px; }
   function giftBonus(now) {
     let drips = 1, drop = 1;
     for (const k of KINDS) {
-      const n = Math.min(k.cap, myGifts.filter(g => g.kind === k.id && isActive(g, now)).length);
+      const n = Math.min(k.cap, myGifts.filter(g => g.kind === k.id && known(g) && isActive(g, now)).length);
       if (!n) continue;
       if (k.eff.drips) drips *= 1 + k.eff.drips * n;
       if (k.eff.drop) drop *= 1 + k.eff.drop * n;
@@ -729,6 +736,21 @@ main { padding-top: 18px; }
   const weather = (t) => 1 + AMP * Math.sin(2 * Math.PI * t / DAY);
   function weatherIntegral(t0, t1) { const k = 2 * Math.PI / DAY; return ((t1 - t0) + AMP / k * (Math.cos(k * t0) - Math.cos(k * t1))) / 1000; }
 
+  // Visitors that arrived censored are revealed once you've unlocked their kind, even if that happened offline.
+  function revealCensored() {
+    if (!state.censored.length || !myGifts.length) return;
+    const now = myGifts.filter(g => state.censored.includes(g.id) && known(g));
+    if (!now.length) return;
+    for (const k of KINDS) {
+      const gs = now.filter(g => g.kind === k.id);
+      if (!gs.length) continue;
+      news(gs.length === 1 ? "The censored visitor from " + nameOf(gs[0].from, gs[0].fromNick) + " was " + (/^[aeiou]/i.test(k.name) ? "an " : "a ") + k.name.toLowerCase() + "!" + (gs[0].note ? " Its message: \u201c" + gs[0].note + "\u201d" : "") : gs.length + " censored visitors turned out to be " + k.plural + "!");
+    }
+    const ids = new Set(now.map(g => g.id));
+    state.censored = state.censored.filter(id => !ids.has(id));
+    saveLocal();
+  }
+
   function advance(now) {
     if (now <= state.lastTick) return 0;
     const gain = baseRate() * weatherIntegral(state.lastTick, now);
@@ -738,6 +760,7 @@ main { padding-top: 18px; }
     for (const k of KINDS) if (all >= k.at && !state.unlocked[k.id]) {
       state.unlocked[k.id] = now;
       news("Unlocked: " + k.name + ". One has found its way into your cave" + (db ? ", and you can now send them to others." : "."));
+      revealCensored();
     }
     return gain;
   }
@@ -938,7 +961,7 @@ main { padding-top: 18px; }
     if (!myGifts.length) { ul.appendChild(el("li", "empty", db && group ? "No visitors yet. Ask someone in your group to send one." : "Visitors arrive from other people's caves once you're in a group.")); return; }
     const now = Date.now();
     for (const k of KINDS) {
-      const gs = myGifts.filter(g => g.kind === k.id).sort((a, b) => b.sentAt - a.sentAt);
+      const gs = knownGifts().filter(g => g.kind === k.id).sort((a, b) => b.sentAt - a.sentAt);
       if (!gs.length) continue;
       const act = Math.min(k.cap, gs.filter(g => isActive(g, now)).length);
       const li = el("li");
@@ -959,7 +982,22 @@ main { padding-top: 18px; }
       }
       ul.appendChild(li);
     }
+    renderCensored(ul);
   }
+  function renderCensored(ul) {
+    const hidden = myGifts.filter(g => !known(g)).sort((a, b) => b.sentAt - a.sentAt);
+    if (!hidden.length) return;
+    const li = el("li");
+    li.append(el("div", "who", hidden.length === 1 ? "1 censored visitor" : hidden.length + " censored visitors"));
+    li.append(el("div", "meta", "From " + [...new Set(hidden.map(g => nameOf(g.from, g.fromNick)))].join(", ") + ". You haven't unlocked " + (hidden.length === 1 ? "this kind" : "these") + " yet, so " + (hidden.length === 1 ? "it stays" : "they stay") + " blacked out and " + (hidden.length === 1 ? "doesn't" : "don't") + " count until you do."));
+    for (const g of hidden.filter(x => x.note).slice(0, 3)) {
+      const m = el("div", "meta");
+      m.append(el("span", "censor", "\u2588".repeat(12)), " a censored message from " + nameOf(g.from, g.fromNick) + ", " + dayStr(g.sentAt) + ".");
+      li.appendChild(m);
+    }
+    ul.appendChild(li);
+  }
+
   function renderCollection() {
     const ul = $("collection"); ul.textContent = "";
     const all = allTime(), rate = baseRate();
@@ -1151,12 +1189,13 @@ main { padding-top: 18px; }
       acts.appendChild(look);
       li.appendChild(acts);
       const kinds = KINDS.filter(k => state.unlocked[k.id]);
+      const theirs = o.home || {};
       if (kinds.length) {
         const send = el("div", "acts");
         const sel = el("select"); sel.setAttribute("aria-label", "Visitor to send to " + nameOf(o.id));
         for (const k of kinds) {
           const wait = (state.sent[o.id + ":" + k.id] || 0) + k.cd - now;
-          const opt = el("option", null, k.name + (wait > 0 ? " (in " + duration(wait / 1000) + ")" : ""));
+          const opt = el("option", null, k.name + (wait > 0 ? " (in " + duration(wait / 1000) + ")" : !theirs[k.id] ? " (arrives censored)" : ""));
           opt.value = k.id; opt.disabled = wait > 0;
           sel.appendChild(opt);
         }
@@ -1172,6 +1211,7 @@ main { padding-top: 18px; }
         b.addEventListener("click", () => sendGift(o, sel.value, note.value.trim()));
         send.append(sel, note, b);
         li.appendChild(send);
+        if (kinds.some(k => !theirs[k.id])) li.appendChild(el("div", "meta", "Visitors " + nameOf(o.id) + " hasn't discovered yet arrive as a black box with the message blacked out, until they unlock that kind."));
       } else li.appendChild(el("div", "meta", "Your first visitor to send unlocks at " + mass(KINDS[0].at) + " all-time."));
       if (groupOwner === myId) {
         const kick = el("button", "link", "Remove from group"); kick.type = "button";
@@ -1517,10 +1557,24 @@ main { padding-top: 18px; }
       for (const it of pool.slice(0, SHOW_MAX[kind] || 2)) {
         const grp = svgEl(g, "g", {});
         const t = document.createElementNS(NS, "title");
-        t.textContent = KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "");
-        grp.appendChild(t);
         DRAW[kind](grp, cave, it, rng(hashStr(it.id)), now);
         let bb = null; try { bb = grp.getBBox(); } catch {}
+        if (!known(it)) {
+          // Swap the visitor for a same-size-for-everything black box, so not even its shape gives it away.
+          grp.textContent = ""; roosts.delete(it.id);
+          const ceilingKinds = ["bat", "spider", "glow", "painting"];
+          const cx = bb && bb.width ? bb.x + bb.width / 2 : 60 + rng(hashStr(it.id))() * 680;
+          const cy = bb && bb.width ? bb.y + bb.height / 2 : (ceilingKinds.includes(kind) ? cave.ceilAt(cx) + 26 : cave.floorAt(cx) - 22);
+          const bx = Math.min(796 - 88, Math.max(4, cx - 44)), by = Math.min(396 - 36, Math.max(4, cy - 18));
+          svgEl(grp, "rect", { x: bx, y: by, width: 88, height: 36, rx: 3, fill: "#0b0b0b", stroke: "#3a3a3a", "stroke-width": 1 });
+          const t1 = svgEl(grp, "text", { x: bx + 44, y: by + 16, "font-size": 11, "font-weight": 700, "letter-spacing": 1.5, fill: "#f2f2f2", "text-anchor": "middle" }); t1.textContent = "CENSORED";
+          const t2 = svgEl(grp, "text", { x: bx + 44, y: by + 28, "font-size": 8, fill: "#9a9a9a", "text-anchor": "middle" }); t2.textContent = "not unlocked yet";
+          for (const t of [t1, t2]) t.setAttribute("font-family", "Figtree, system-ui, sans-serif");
+          bb = { x: bx, y: by, width: 88, height: 36 };
+        }
+        const tip = document.createElementNS(NS, "title");
+        tip.textContent = known(it) ? KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "") : "Censored: you haven't unlocked this yet" + (it.from ? ". From " + nameOf(it.from, it.fromNick) : "");
+        grp.appendChild(tip);
         drawn.push({ it, kind, grp, bb: bb && bb.width ? bb : null, noted: noted.includes(it) });
       }
     }
@@ -1570,8 +1624,9 @@ main { padding-top: 18px; }
       if (!bb || (!bb.width && !bb.height)) continue;
       const ax = bb.x + bb.width / 2, ceiling = bb.y + bb.height / 2 < 200;
       const ay = ceiling ? bb.y + bb.height : bb.y;
-      const lines = wrap(it.note, k > 1.5 ? 18 : 24).slice(0, 4);
-      const from = "from " + nameOf(it.from, it.fromNick);
+      const hidden = !known(it);
+      const lines = hidden ? ["\u2588".repeat(14), "\u2588".repeat(9)] : wrap(it.note, k > 1.5 ? 18 : 24).slice(0, 4);
+      const from = "from " + nameOf(it.from, it.fromNick) + (hidden ? ", censored" : "");
       const w = Math.max(...lines.map(l => l.length), from.length * 0.9) * cw + pad * 2 + 10 * k;
       const h = (lines.length + 1) * lh + pad * 1.4;
       const r = { x: Math.min(796 - w, Math.max(4, ax - w / 2)), y: ceiling ? ay + 12 * k : ay - 12 * k - h, w, h };
@@ -1585,7 +1640,10 @@ main { padding-top: 18px; }
       svgEl(b, "path", { d: `M${tx - 6 * k} ${ty} L${ax} ${tip} L${tx + 6 * k} ${ty} Z`, fill: "var(--bubble)", stroke: "var(--bubble-edge)", "stroke-width": 1 });
       svgEl(b, "rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 8 * k, fill: "var(--bubble)", stroke: "var(--bubble-edge)", "stroke-width": 1 });
       svgEl(b, "path", { d: `M${tx - 5 * k} ${ty} L${tx + 5 * k} ${ty}`, stroke: "var(--bubble)", "stroke-width": 2 });
-      lines.forEach((ln, i) => { const t = svgEl(b, "text", { x: r.x + pad, y: r.y + pad + fs * 0.85 + i * lh, "font-size": fs, fill: "var(--bubble-ink)" }); t.textContent = ln; });
+      lines.forEach((ln, i) => {
+        if (hidden) { svgEl(b, "rect", { x: r.x + pad, y: r.y + pad + i * lh + 2 * k, width: ln.length * cw * 0.9, height: fs * 0.95, fill: "#0b0b0b" }); return; }
+        const t = svgEl(b, "text", { x: r.x + pad, y: r.y + pad + fs * 0.85 + i * lh, "font-size": fs, fill: "var(--bubble-ink)" }); t.textContent = ln;
+      });
       const f = svgEl(b, "text", { x: r.x + pad, y: r.y + pad + fs * 0.85 + lines.length * lh, "font-size": fs * 0.85, fill: "var(--bubble-muted)" });
       f.textContent = from;
       // close button
@@ -1931,10 +1989,17 @@ main { padding-top: 18px; }
       if (group !== g) return;
       const mine = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(x => KIND[x.kind]);
       const fresh = mine.filter(x => !state.seenGifts.includes(x.id));
-      for (const x of fresh.slice(-4)) news(ARRIVE[x.kind](nameOf(x.from, x.fromNick)) + (x.note ? " Note: \u201c" + x.note + "\u201d" : ""));
-      if (fresh.length) { state.seenGifts = state.seenGifts.concat(fresh.map(x => x.id)).slice(-300); saveLocal(); }
+      for (const x of fresh.slice(-4)) news(known(x)
+        ? ARRIVE[x.kind](nameOf(x.from, x.fromNick)) + (x.note ? " Note: \u201c" + x.note + "\u201d" : "")
+        : "A censored visitor from " + nameOf(x.from, x.fromNick) + " arrived" + (x.note ? ", with a censored message" : "") + ". You'll see what it is once you unlock it.");
+      if (fresh.length) {
+        state.seenGifts = state.seenGifts.concat(fresh.map(x => x.id)).slice(-300);
+        state.censored = state.censored.concat(fresh.filter(x => !known(x)).map(x => x.id)).slice(-300);
+        saveLocal();
+      }
       advance(Date.now()); // bank earnings at the old rate before bonuses change
       myGifts = mine;
+      revealCensored();
       render(true);
     }, () => {}));
   }
