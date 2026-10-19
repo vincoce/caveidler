@@ -183,6 +183,15 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .arena text { font-family: "Figtree", system-ui, sans-serif; }
 .arena .big { font-family: "Young Serif", Georgia, serif; }
 .ribbon { display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--btn-ink); background: var(--ochre); border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: 3px; }
+[hidden] { display: none !important; }
+.menu .sm { display: none; }
+.bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0; }
+.bar span { display: block; height: 100%; background: var(--ochre); border-radius: 999px; }
+.museum { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.museum-card svg { background: var(--fight-bg); padding: 8px; }
+.museum-card.unknown .t { color: var(--muted); font-weight: 500; }
+.dig-tool { transform-box: fill-box; transform-origin: 0% 100%; animation: digswing 1.6s ease-in-out infinite; }
+@keyframes digswing { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(18deg); } }
 h3.rec { font: 600 1rem/1.3 "Figtree", system-ui, sans-serif; margin: 18px 0 6px; }
 .vs .m { color: var(--muted); font-size: 0.875rem; margin-top: 4px; }
 .wl { font-weight: 600; }
@@ -228,6 +237,7 @@ main { padding-top: 18px; }
     gap: 2px; overflow: visible;
   }
   .menu a { flex: 1 1 0; text-align: center; padding: 9px 1px; font-size: 0.72rem; border-radius: 10px; }
+  .menu .lg { display: none; } .menu .sm { display: inline; }
   .badge { position: absolute; top: 6px; right: 8px; margin: 0; }
   main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
@@ -241,9 +251,10 @@ main { padding-top: 18px; }
       <a href="#cave" data-page="cave">Cave</a>
       <a href="#explore" data-page="explore">Explore<span class="badge" id="badgeExplore" hidden></span></a>
       <a href="#group" data-page="group">Group<span class="badge" id="badgeGroup" hidden></span></a>
-      <a href="#collection" data-page="collection">Collection</a>
-      <a href="#fight" data-page="fight">Bat fight<span class="badge" id="badgeFight" hidden></span></a>
-      <a href="#rankings" data-page="rankings">Rankings</a>
+      <a href="#dig" data-page="dig">Dig<span class="badge" id="badgeDig" hidden></span></a>
+      <a href="#collection" data-page="collection"><span class="lg">Collection</span><span class="sm">Items</span></a>
+      <a href="#fight" data-page="fight"><span class="lg">Bat fight</span><span class="sm">Fight</span><span class="badge" id="badgeFight" hidden></span></a>
+      <a href="#rankings" data-page="rankings"><span class="lg">Rankings</span><span class="sm">Ranks</span></a>
     </nav>
   </div>
 </header>
@@ -351,6 +362,30 @@ main { padding-top: 18px; }
           <ul class="list" id="visitors"></ul>
         </section>
       </div>
+    </div>
+  </div>
+
+  <div class="page" data-page="dig" hidden>
+    <section>
+      <h2>The dig</h2>
+      <p class="sub">Your group's trench deepens by itself, day and night. Buried things show faintly in the soil and grow clearer as the trench gets close. Every find goes into the museum and gives everyone in the group +1% calcite per drop.</p>
+      <p class="empty" id="digIntro"></p>
+    </section>
+    <div id="digMain" hidden>
+      <div class="arena"><svg id="digSvg" viewBox="0 0 800 360" role="img" aria-label="The group's dig site"></svg></div>
+      <p id="digStatus" style="margin-top:12px"></p>
+    </div>
+    <div class="cols" id="digSide" hidden style="margin-top:24px">
+      <section>
+        <h2>Equipment</h2>
+        <p class="sub">Give calcite to the group's equipment fund. When it's full, anyone in the group can buy the next tool.</p>
+        <ul class="list" id="digEquip"></ul>
+      </section>
+      <section>
+        <h2>Museum</h2>
+        <p class="sub">Everything your group has dug up. Six sites, each older than the last.</p>
+        <div class="cards museum" id="museum"></div>
+      </section>
     </div>
   </div>
 
@@ -687,7 +722,7 @@ main { padding-top: 18px; }
   const projectStage = () => project ? PROJECT.filter(p => (project.total || 0) >= p.at).length : 0;
   const projectMult = () => 1 + 0.1 * projectStage();
   const dripsPerMin = (now = Date.now()) => (4 + 2 * state.levels.crack) * Math.pow(1.25, state.levels.roots) * Math.pow(2, state.levels.passage) * (T().drips || 1) * giftBonus(now).drips;
-  const mgPerDrop = (now = Date.now()) => 0.05 * Math.pow(1.3, state.levels.soil) * Math.pow(1 + milestoneBonus(), state.reached.length) * legacyMult() * (T().drop || 1) * projectMult() * giftBonus(now).drop;
+  const mgPerDrop = (now = Date.now()) => 0.05 * Math.pow(1.3, state.levels.soil) * Math.pow(1 + milestoneBonus(), state.reached.length) * legacyMult() * (T().drop || 1) * projectMult() * digMult() * giftBonus(now).drop;
   const baseRate = () => dripsPerMin() / 60 * mgPerDrop(); // mg/s before weather
 
   const AMP = 0.25;
@@ -794,7 +829,7 @@ main { padding-top: 18px; }
     if (!force && key === minuteKey) return;
     minuteKey = key;
     renderJournal(); renderMove(); renderCollection(); renderVisitors();
-    renderGroup(); renderProject(); renderRankings(); renderAtlas(); renderFight();
+    renderGroup(); renderProject(); renderRankings(); renderAtlas(); renderFight(); renderDig();
     updateBadges();
   }
 
@@ -1817,7 +1852,7 @@ main { padding-top: 18px; }
 
 
   // ---------------- pages ----------------
-  const PAGES = ["cave", "explore", "group", "fight", "collection", "rankings"];
+  const PAGES = ["cave", "explore", "group", "dig", "fight", "collection", "rankings"];
   let page = "cave";
   function showPage(name, noScroll) {
     if (!PAGES.includes(name)) name = "cave";
@@ -1833,6 +1868,7 @@ main { padding-top: 18px; }
     if (name === "rankings") loadRankings(false);
     if (name === "fight") { if (Date.now() - fight.at > MIN) loadFight(true); fight.seen = fight.week; }
     if (name !== "fight") stopReplay();
+    if (name === "dig") digBadge = false;
     if (changed && !noScroll) window.scrollTo({ top: 0 });
     render(true);
   }
@@ -1844,6 +1880,7 @@ main { padding-top: 18px; }
   function updateBadges() {
     $("badgeExplore").hidden = !(state.lifetime >= NEW_CAVE_AT && !state.choicesSeen && page !== "explore");
     if (seenGiftCount < 0) seenGiftCount = myGifts.length;
+    $("badgeDig").hidden = !(digBadge && page !== "dig");
     // A dot when a new fight has happened that you haven't looked at yet.
     $("badgeFight").hidden = !(fight.week != null && fight.week !== fight.seen && fight.mine && page !== "fight");
     $("badgeGroup").hidden = !((myGifts.length > seenGiftCount || requests.length > seenReqCount) && page !== "group");
@@ -2089,7 +2126,7 @@ main { padding-top: 18px; }
     for (const u of unsubs) { try { u(); } catch {} }
     unsubs = [];
     if (visiting) goHome();
-    myGifts = []; others = []; banned = []; requests = []; project = null; leaving = false;
+    myGifts = []; others = []; banned = []; requests = []; project = null; dig = null; leaving = false;
     groupData = null; groupOwner = null; groupState = "none";
   }
 
@@ -2172,7 +2209,7 @@ main { padding-top: 18px; }
       nicks[myId] = myNick;
       groupState = "ready";
       setTimeout(() => loadFight(true), 0);
-      subscribeGifts(g); subscribeOthers(g); subscribeProject(g); loadSendlog(g);
+      subscribeGifts(g); subscribeOthers(g); subscribeProject(g); subscribeDig(g); loadSendlog(g);
       await pushCloud(true);
       render(true);
     } catch (e) {
@@ -2506,6 +2543,300 @@ main { padding-top: 18px; }
       } catch {}
     }
     updateSaveNote();
+  }
+
+  // ---------------- archaeology ----------------
+  // Each group has one dig. The trench deepens on its own; equipment bought with the group's calcite
+  // makes it faster. Everything is worked out from (progress, lastUpdate, level), so every member sees
+  // the same trench, and the server checks nobody digs faster than their equipment allows.
+  const DIG_SPEED = [3, 6, 10.5, 18, 30, 48, 75];                 // cm per day, per equipment level
+  const DIG_COST = [0, 5e4, 5e5, 5e6, 5e7, 5e8, 5e9];             // mg of calcite for each level
+  const DIG_TOOLS = ["Bare hands", "Trowel", "Brushes and buckets", "Sieve station", "Pickaxe and shoring", "Lamps and a generator", "Ground radar"];
+  const DIG_TOOL_TEXT = [
+    "Scraping the soil away by hand.",
+    "A proper trowel for careful scraping. Twice as fast.",
+    "Brushes for the fine work and buckets to carry soil out. 3.5 times as fast.",
+    "Soil gets sieved at the edge, so nothing small is missed. 6 times as fast.",
+    "Heavier tools and wooden planks to hold the walls. 10 times as fast.",
+    "Light down in the trench, so work never stops. 16 times as fast.",
+    "Finds can be located before digging. 25 times as fast."
+  ];
+  const FIND_BONUS = 0.01;
+  const SITES = [
+    { name: "The cave floor", depth: 60, soil: ["#6b5a48", "#5e4f40", "#715f4c", "#5a4a3b", "#665544"], finds: [
+      { name: "Silver coin", type: "coin", c: "#c9ccd1", text: "A worn medieval silver coin. Someone sheltered here a few hundred years ago." },
+      { name: "Clay pipe", type: "pipe", c: "#e6dccb", text: "A white clay tobacco pipe, the stem snapped off." },
+      { name: "Iron key", type: "key", c: "#7a6a5c", text: "A rusted key. Whatever it opened is long gone." },
+      { name: "Glass bead", type: "bead", c: "#5aa0c8", text: "A small blue glass bead from a necklace." },
+      { name: "Horseshoe", type: "horseshoe", c: "#6f625a", text: "An old horseshoe. Lucky for someone, once." } ] },
+    { name: "The Roman layer", depth: 160, soil: ["#7a5c45", "#6d523e", "#80624a", "#664c39", "#735742"], finds: [
+      { name: "Bronze brooch", type: "fibula", c: "#b98a4a", text: "A fibula, the safety pin that held a Roman cloak together." },
+      { name: "Oil lamp", type: "lamp", c: "#b5643c", text: "A clay oil lamp with soot still around the wick hole." },
+      { name: "Roman coin", type: "coin", c: "#c49a54", text: "A bronze coin with an emperor's worn face." },
+      { name: "Red pottery shard", type: "shard", c: "#a8452e", text: "Glossy red tableware, carried all the way from Gaul." },
+      { name: "Bone hairpin", type: "needle", c: "#e8dcc2", text: "A carved hairpin with a little knob on top." } ] },
+    { name: "The Bronze Age hearth", depth: 400, soil: ["#4f4038", "#3f332d", "#5a4a3f", "#352b26", "#4a3c34"], finds: [
+      { name: "Bronze axe head", type: "axe", c: "#a87b3f", text: "Cast in a stone mould and sharpened by hand." },
+      { name: "Amber beads", type: "beads", c: "#d99a2b", text: "Amber from the Baltic coast, traded across half a continent." },
+      { name: "Spindle whorl", type: "whorl", c: "#8c6a4f", text: "A clay weight for spinning wool into thread." },
+      { name: "Burnt grain pot", type: "pot", c: "#5c4a3e", text: "A cooking pot with charred grain still stuck inside." },
+      { name: "Bone needle", type: "needle", c: "#e3d6bb", text: "A needle with a tiny drilled eye." } ] },
+    { name: "The Ice Age bone bed", depth: 1000, soil: ["#8a7b66", "#7c6e5b", "#958670", "#706351", "#847562"], finds: [
+      { name: "Flint hand axe", type: "blade", c: "#9a9184", text: "Knapped from a single flint nodule, sharp after tens of thousands of years." },
+      { name: "Cave bear skull", type: "skull", c: "#e2d6bd", text: "A cave bear that never woke from its last winter's sleep." },
+      { name: "Mammoth tooth", type: "tooth", c: "#d9ccb0", text: "A grinding molar the size of a brick." },
+      { name: "Reindeer antler", type: "antler", c: "#d6c7a8", text: "Shed antler, with cut marks from a stone tool." },
+      { name: "Wolf jaw", type: "jaw", c: "#ddd0b5", text: "The jaw of an Ice Age wolf." } ] },
+    { name: "The ochre layer", depth: 2500, soil: ["#9a5a3c", "#8a4f35", "#a5654a", "#7d4630", "#935640"], finds: [
+      { name: "Bone flute", type: "flute", c: "#e6dac0", text: "A vulture-bone flute with finger holes. One of the oldest instruments there is." },
+      { name: "Venus figurine", type: "figurine", c: "#b58a5e", text: "A small carved figure, smooth from being held." },
+      { name: "Painted pebble", type: "pebble", c: "#cbb79a", text: "A river pebble with red ochre dots." },
+      { name: "Shell necklace", type: "beads", c: "#efe6d6", text: "Pierced snail shells strung together." },
+      { name: "Ochre crayon", type: "crayon", c: "#b5482c", text: "A lump of red ochre, rubbed flat on one side from drawing." } ] },
+    { name: "The ancient sea floor", depth: 6000, soil: ["#b3aa95", "#a69d88", "#bdb4a0", "#9b927e", "#aea592"], finds: [
+      { name: "Trilobite", type: "trilobite", c: "#6f675c", text: "A sea creature from long before the dinosaurs." },
+      { name: "Ammonite", type: "spiral", c: "#8a7f70", text: "A coiled shell, once a squid-like swimmer." },
+      { name: "Shark tooth", type: "sharktooth", c: "#4e4a45", text: "A tooth from a shark that swam where this cave is now." },
+      { name: "Sea urchin", type: "urchin", c: "#9b8f7c", text: "A fossil sea urchin, its five-part star still clear." },
+      { name: "Crinoid stem", type: "crinoid", c: "#8f8576", text: "A piece of a sea lily, a stalked animal related to starfish." } ] }
+  ];
+  const FIND_AT = [0.07, 0.27, 0.48, 0.69, 0.9]; // how deep in each site the finds lie
+  let dig = null; // the group's dig document
+
+  function digDepth(now = Date.now()) {
+    if (!dig) return 0;
+    const lu = dig.lastUpdate && dig.lastUpdate.toMillis ? dig.lastUpdate.toMillis() : now;
+    return Math.min(SITES[dig.site].depth, (dig.progress || 0) + DIG_SPEED[dig.level || 0] * Math.max(0, now - lu) / DAY);
+  }
+  function findsDone(now = Date.now()) {
+    if (!dig) return 0;
+    const d = digDepth(now), s = SITES[dig.site];
+    return dig.site * 5 + FIND_AT.filter(f => f * s.depth <= d).length;
+  }
+  const digMult = () => (dig && group) ? 1 + FIND_BONUS * findsDone() : 1;
+
+  function subscribeDig(g) {
+    let first = true;
+    keep(F.onSnapshot(F.doc(db, "groups/" + g + "/dig/main"), async (snap) => {
+      if (group !== g) return;
+      advance(Date.now());
+      dig = snap.exists() ? snap.data() : null;
+      if (!dig && first) { try { await F.setDoc(F.doc(db, "groups/" + g + "/dig/main"), { site: 0, progress: 0, level: 0, fund: 0, contrib: {}, lastUpdate: F.serverTimestamp(), created: Date.now() }); } catch {} }
+      first = false;
+      render(true);
+    }, () => {}));
+  }
+
+  // Move on to the next site once this one is dug out (any member's game can do it).
+  let siteBusy = false;
+  async function maybeNextSite() {
+    if (!dig || siteBusy || !group || groupState !== "ready") return;
+    const s = SITES[dig.site];
+    if (dig.site >= SITES.length - 1 || digDepth() < s.depth) return;
+    siteBusy = true;
+    try { await F.updateDoc(F.doc(db, base() + "/dig/main"), { site: dig.site + 1, progress: 0, lastUpdate: F.serverTimestamp() }); news("Site dug out! The group moves down to " + SITES[dig.site + 1].name.toLowerCase() + "."); }
+    catch {}
+    siteBusy = false;
+  }
+
+  // Tell people about new finds (once per device).
+  function noticeFinds() {
+    if (!dig || !group) return;
+    const key = "dripstone-dig-seen-" + group, n = findsDone();
+    let seen = -1; try { seen = Number(localStorage.getItem(key)); if (!Number.isFinite(seen)) seen = -1; } catch {}
+    if (seen >= 0 && n > seen) {
+      const all = SITES.flatMap(s => s.finds);
+      const an = (w) => (/^[aeiou]/i.test(w) ? "an " : "a ") + w;
+      for (let i = seen; i < n && i < all.length; i++) news("Your group dug out " + an(all[i].name.toLowerCase()) + "!");
+      if (page !== "dig") digBadge = true;
+    }
+    try { localStorage.setItem(key, String(n)); } catch {}
+  }
+  let digBadge = false;
+
+  async function giveToDig(frac) {
+    if (!db || !group || groupState !== "ready" || !dig) return;
+    advance(Date.now());
+    const amount = Math.floor(state.calcite * frac);
+    if (amount < 1) { news("You need at least 1 mg of calcite to give."); return; }
+    state.calcite -= amount; saveLocal(); render(true);
+    try {
+      await F.updateDoc(F.doc(db, base() + "/dig/main"), { fund: F.increment(amount), ["contrib." + myId]: F.increment(amount) });
+      news("You gave " + mass(amount) + " to the equipment fund.");
+    } catch (e) {
+      state.calcite += amount; saveLocal(); render(true);
+      news("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
+    }
+  }
+  async function buyEquipment() {
+    if (!dig) return;
+    const next = (dig.level || 0) + 1, cost = DIG_COST[next];
+    if (!cost || (dig.fund || 0) < cost) return;
+    // Bank the digging done so far (a little under, so a fast clock can't overshoot what the server allows).
+    const banked = Math.max(dig.progress || 0, Math.min(SITES[dig.site].depth, digDepth(Date.now() - 5 * MIN)));
+    try {
+      await F.updateDoc(F.doc(db, base() + "/dig/main"), { level: next, fund: F.increment(-cost), progress: banked, lastUpdate: F.serverTimestamp() });
+      news("The group bought: " + DIG_TOOLS[next].toLowerCase() + ". Digging is faster now.");
+    } catch (e) { news("Couldn't buy it (" + (e.code || "error") + "). Someone may have just bought it."); }
+  }
+
+  // ---- drawing finds ----
+  function drawFind(g, f, x, y, s, op) {
+    const c = f.c, G = svgEl(g, "g", { transform: `translate(${x} ${y}) scale(${s})`, opacity: op });
+    const P = (d, fill, extra) => svgEl(G, "path", Object.assign({ d, fill: fill || c }, extra || {}));
+    const L = (d, w, col) => svgEl(G, "path", { d, fill: "none", stroke: col || c, "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round" });
+    const C = (cx, cy, r, fill) => svgEl(G, "circle", { cx, cy, r, fill: fill || c });
+    const dark = "rgba(0,0,0,0.28)";
+    switch (f.type) {
+      case "coin": C(0, 0, 9); svgEl(G, "circle", { cx: 0, cy: 0, r: 6.5, fill: "none", stroke: dark, "stroke-width": 1 }); P("M-2 -4 C2 -4 3 -1 0 0 C-3 1 -2 4 2 4", "none", { stroke: dark, "stroke-width": 1.2 }); break;
+      case "pipe": L("M-14 -2 L6 -2", 3); P("M4 -9 L12 -9 L11 2 C10 5 6 5 5 2 Z"); break;
+      case "key": svgEl(G, "circle", { cx: -9, cy: 0, r: 5, fill: "none", stroke: c, "stroke-width": 2.5 }); L("M-4 0 L13 0 M9 0 L9 5 M13 0 L13 4", 2.5); break;
+      case "bead": C(0, 0, 5); C(-1.5, -1.5, 1.5, "rgba(255,255,255,0.5)"); break;
+      case "horseshoe": L("M-9 8 C-12 -10 12 -10 9 8", 4.5); break;
+      case "fibula": L("M-12 4 C-6 -8 6 -8 12 4", 2.5); L("M-12 4 L12 4", 1.2); C(12, 4, 2.5); break;
+      case "lamp": P("M-14 2 C-14 -6 6 -7 9 -2 L15 -1 L15 2 L9 3 C6 7 -14 8 -14 2 Z"); C(-3, -1, 2.5, dark); break;
+      case "shard": P("M-12 -6 L8 -10 L12 2 L-4 8 L-10 4 Z"); L("M-9 -2 L8 -5", 1, dark); break;
+      case "needle": L("M-13 0 L13 0", 2); C(-13, 0, 2.2); break;
+      case "axe": P("M-12 -4 L4 -6 C10 -10 14 -2 14 0 C14 2 10 10 4 6 L-12 4 Z"); break;
+      case "beads": for (let i = 0; i < 7; i++) { const a = Math.PI * (0.15 + 0.7 * i / 6); C(Math.cos(a) * -12, Math.sin(a) * 9 - 4, 3); } break;
+      case "whorl": C(0, 0, 8); C(0, 0, 2.5, dark); break;
+      case "pot": P("M-10 -8 L10 -8 L8 6 C6 10 -6 10 -8 6 Z"); L("M-11 -8 L11 -8", 2); C(-2, -5, 1.4, dark); C(3, -6, 1.2, dark); break;
+      case "blade": P("M0 -13 C8 -6 9 6 0 12 C-9 6 -8 -6 0 -13 Z"); L("M0 -10 L-3 0 L2 8", 0.8, dark); break;
+      case "skull": P("M-15 2 C-15 -8 8 -10 14 -2 L16 4 C12 6 6 4 2 6 L-6 8 C-12 8 -15 6 -15 2 Z"); C(2, -2, 2.5, dark); L("M8 4 L9 7 M11 4 L12 7", 1.4); break;
+      case "tooth": P("M-11 -6 L11 -6 L10 4 L-10 4 Z"); for (let i = -8; i <= 8; i += 4) L(`M${i} -6 L${i} 4`, 0.8, dark); break;
+      case "antler": L("M-12 8 C-6 0 0 -4 12 -10 M-2 -2 L-4 -10 M5 -6 L5 -13", 2.5); break;
+      case "jaw": L("M-13 -2 C-4 6 6 6 13 -4", 3.5); for (let i = -6; i <= 8; i += 4) L(`M${i} 2 L${i} -2`, 1.6); break;
+      case "flute": svgEl(G, "rect", { x: -14, y: -2.5, width: 28, height: 5, rx: 2.5, fill: c }); for (let i = -6; i <= 6; i += 4) C(i, 0, 1.1, dark); break;
+      case "figurine": svgEl(G, "ellipse", { cx: 0, cy: -9, rx: 3, ry: 3.5, fill: c }); svgEl(G, "ellipse", { cx: 0, cy: 1, rx: 6.5, ry: 7.5, fill: c }); svgEl(G, "ellipse", { cx: 0, cy: 10, rx: 3.5, ry: 3, fill: c }); break;
+      case "pebble": svgEl(G, "ellipse", { cx: 0, cy: 0, rx: 11, ry: 7, fill: c }); for (const [px, py] of [[-5, -2], [0, 1], [5, -1], [-2, 3]]) C(px, py, 1.4, "#a33a22"); break;
+      case "crayon": P("M-9 4 L-3 -8 L9 -6 L6 6 Z"); break;
+      case "trilobite": svgEl(G, "ellipse", { cx: 0, cy: 0, rx: 8, ry: 12, fill: c }); for (let i = -7; i <= 8; i += 3) L(`M-7 ${i} L7 ${i}`, 0.8, dark); L("M-2.5 -11 L-2.5 11 M2.5 -11 L2.5 11", 0.8, dark); break;
+      case "spiral": { let d = ""; for (let t = 0; t <= 4.2 * Math.PI; t += 0.25) { const r = 1 + t * 0.85; d += (d ? " L" : "M") + (Math.cos(t) * r).toFixed(1) + " " + (Math.sin(t) * r).toFixed(1); } L(d, 1.8); break; }
+      case "sharktooth": P("M-8 6 L0 -12 L8 6 C4 4 -4 4 -8 6 Z"); break;
+      case "urchin": C(0, 0, 9); for (let i = 0; i < 5; i++) { const a = i * Math.PI * 2 / 5 - Math.PI / 2; L(`M0 0 L${(Math.cos(a) * 8).toFixed(1)} ${(Math.sin(a) * 8).toFixed(1)}`, 1, dark); } break;
+      case "crinoid": for (let i = -10; i <= 10; i += 4) svgEl(G, "rect", { x: i - 1.8, y: -3, width: 3.6, height: 6, rx: 1, fill: c }); break;
+    }
+    return G;
+  }
+
+  function drawDig() {
+    const svg = $("digSvg"); svg.textContent = "";
+    if (!dig) return;
+    const s = SITES[dig.site], D = digDepth(), lvl = dig.level || 0;
+    const top = 70, bottom = 340, X0 = 90, X1 = 710;
+    const yOf = (cm) => top + (cm / s.depth) * (bottom - top - 12);
+    const defs = svgEl(svg, "defs", {});
+    svgEl(svg, "rect", { x: 0, y: 0, width: 800, height: 360, fill: "#1d2731" });
+    // soil layers
+    for (let i = 0; i < 5; i++) svgEl(svg, "rect", { x: 0, y: top + i * (360 - top) / 5, width: 800, height: (360 - top) / 5 + 1, fill: s.soil[i] });
+    const r = rng(hashStr("soil" + dig.site));
+    for (let i = 0; i < 70; i++) svgEl(svg, "circle", { cx: r() * 800, cy: top + 6 + r() * (354 - top), r: 1 + r() * 2.5, fill: "rgba(0,0,0,0.18)" });
+    // finds still in the soil, growing clearer as the trench gets near
+    // Each find starts showing when the trench is within a third of the site's depth of it,
+    // first as a faint blurred shape, then sharper and stronger until it's dug out.
+    const reveal = s.depth * 0.34;
+    const fx = (i) => X0 + 60 + i * ((X1 - X0 - 120) / 4);
+    for (let k = 1; k <= 3; k++) { const fb = svgEl(defs, "filter", { id: "blur" + k }); svgEl(fb, "feGaussianBlur", { stdDeviation: k * 1.2 }); }
+    FIND_AT.forEach((fa, i) => {
+      const f = s.finds[i], d = fa * s.depth;
+      if (D >= d) return; // dug out: drawn on the trench floor below
+      const vis = Math.max(0, 1 - (d - D) / reveal);
+      if (vis <= 0) return;
+      const G = drawFind(svg, f, fx(i), yOf(d), 1.3, 0.18 + vis * 0.62);
+      const blur = vis < 0.35 ? 3 : vis < 0.65 ? 2 : vis < 0.9 ? 1 : 0;
+      if (blur) G.setAttribute("filter", "url(#blur" + blur + ")");
+      const t = document.createElementNS(NS, "title"); t.textContent = vis < 0.5 ? "Something is down here..." : "Almost there: " + f.name.toLowerCase() + "?"; G.appendChild(t);
+    });
+    // the trench, dug down to D
+    const fy = yOf(D);
+    if (D > 0.2) {
+      svgEl(svg, "rect", { x: X0, y: top - 1, width: X1 - X0, height: fy - top + 1, fill: "#141c23" });
+      svgEl(svg, "path", { d: `M${X0} ${fy} L${X1} ${fy}`, stroke: "rgba(255,255,255,0.12)", "stroke-width": 2 });
+      if (lvl >= 4) for (let y = top + 10; y < fy - 10; y += 28) { svgEl(svg, "rect", { x: X0, y, width: 8, height: 22, fill: "#7a5a36" }); svgEl(svg, "rect", { x: X1 - 8, y, width: 8, height: 22, fill: "#7a5a36" }); }
+    }
+    // dug-out finds lie on the trench floor, each with a little marker flag, until the site is done
+    FIND_AT.forEach((fa, i) => {
+      const f = s.finds[i], d = fa * s.depth; if (D < d) return;
+      const x = fx(i);
+      const G = drawFind(svg, f, x, fy - 12, 1.3, 1);
+      const t = document.createElementNS(NS, "title"); t.textContent = f.name; G.appendChild(t);
+      svgEl(svg, "path", { d: `M${x + 22} ${fy - 1} L${x + 22} ${fy - 30} L${x + 32} ${fy - 26} L${x + 22} ${fy - 22}`, stroke: "#d9a368", fill: "#d9a368", "stroke-width": 1.4 });
+    });
+    // surface and the worker
+    svgEl(svg, "rect", { x: 0, y: 0, width: 800, height: top, fill: "#1d2731" });
+    svgEl(svg, "path", { d: `M0 ${top} L${X0} ${top} M${X1} ${top} L800 ${top}`, stroke: "#5e4f40", "stroke-width": 3 });
+    const wx = X0 + 0.5 * (X1 - X0) + Math.sin(Date.now() / 3600000) * 140, wy = Math.max(top, fy);
+    const w = svgEl(svg, "g", { transform: `translate(${wx} ${wy})` });
+    svgEl(w, "path", { d: "M0 -11 L-3 0 M0 -11 L3 0 M0 -11 L0 -19", stroke: "#cdd5dc", "stroke-width": 2, "stroke-linecap": "round" });
+    svgEl(w, "circle", { cx: 0, cy: -22, r: 3.2, fill: "#cdd5dc" });
+    svgEl(w, "path", { d: "M-3.6 -23 A3.8 3.8 0 0 1 3.8 -23 Z", fill: "#e3b62e" });
+    const tool = svgEl(w, "g", { class: reduceMotion ? "" : "dig-tool" });
+    if (lvl === 0) svgEl(tool, "path", { d: "M0 -16 L7 -6", stroke: "#cdd5dc", "stroke-width": 2, "stroke-linecap": "round" });
+    else if (lvl === 1 || lvl === 2) svgEl(tool, "path", { d: "M0 -16 L7 -6 M6 -7 L9 -2", stroke: "#b8c0c7", "stroke-width": 2, "stroke-linecap": "round" });
+    else svgEl(tool, "path", { d: "M0 -17 L9 -4 M5 -12 C8 -16 13 -14 13 -11", stroke: "#b8c0c7", "stroke-width": 2, fill: "none", "stroke-linecap": "round" });
+    if (lvl >= 2) svgEl(svg, "path", { d: `M${X1 + 20} ${top} L${X1 + 24} ${top - 16} L${X1 + 40} ${top - 16} L${X1 + 44} ${top} Z`, fill: "#7d8a94" });
+    if (lvl >= 3) { svgEl(svg, "rect", { x: X0 - 70, y: top - 14, width: 50, height: 6, fill: "#9a7a52" }); svgEl(svg, "path", { d: `M${X0 - 66} ${top - 8} L${X0 - 66} ${top} M${X0 - 24} ${top - 8} L${X0 - 24} ${top}`, stroke: "#9a7a52", "stroke-width": 3 }); }
+    if (lvl >= 5) for (let i = 0; i < 6; i++) { const lx = X0 + 50 + i * 104; svgEl(svg, "path", { d: `M${lx - 52} ${top + 8} Q${lx} ${top + 18} ${lx + 52} ${top + 8}`, stroke: "#3b4650", fill: "none" }); svgEl(svg, "circle", { cx: lx, cy: top + 14, r: 3, fill: "#ffe69a" }); }
+    if (lvl >= 6) { svgEl(svg, "rect", { x: 30, y: top - 26, width: 28, height: 20, rx: 2, fill: "#3b4650" }); svgEl(svg, "rect", { x: 34, y: top - 22, width: 20, height: 10, fill: "#7fd39a", opacity: 0.8 }); }
+    const label = svgEl(svg, "text", { x: 20, y: 28, "font-size": 14, fill: "#e4ded1" }); label.textContent = "Site " + (dig.site + 1) + " of " + SITES.length + ": " + s.name;
+    const lab2 = svgEl(svg, "text", { x: 780, y: 28, "font-size": 14, fill: "#93a0aa", "text-anchor": "end" }); lab2.textContent = D.toFixed(D < 10 ? 1 : 0) + " of " + s.depth + " cm";
+  }
+
+  function renderDig() {
+    const show = !!(group && groupState === "ready");
+    $("digIntro").textContent = show ? "" : (db && authUser ? "Join a group to dig together." : configured ? "Sign in with Google and join a group to dig together." : "The dig needs online play.");
+    for (const id of ["digMain", "digSide"]) $(id).hidden = !show;
+    if (!show || !dig) return;
+    maybeNextSite(); noticeFinds();
+    drawDig();
+    const s = SITES[dig.site], D = digDepth(), lvl = dig.level || 0, speed = DIG_SPEED[lvl];
+    const nextFind = FIND_AT.map(f => f * s.depth).find(d => d > D);
+    const n = findsDone();
+    $("digStatus").textContent = (D >= s.depth ? (dig.site >= SITES.length - 1 ? "Every site is dug out. The museum is complete." : "This site is dug out. Moving on...") :
+      "Digging " + speed + " cm a day with " + DIG_TOOLS[lvl].toLowerCase() + ". " + (nextFind != null ? "Next find in about " + duration((nextFind - D) / speed * 86400) + "." : "")) +
+      " " + n + " of 30 finds so far, giving every member +" + Math.round(n * FIND_BONUS * 100) + "% calcite per drop.";
+
+    // equipment
+    const eq = $("digEquip"); eq.textContent = "";
+    DIG_TOOLS.forEach((t, i) => {
+      const li = el("li"); if (i > lvl + 1) li.className = "locked";
+      const who = el("div", "who", t); if (i === lvl) who.appendChild(el("span", "ribbon", "in use"));
+      li.append(who, el("div", "meta", DIG_TOOL_TEXT[i] + (i > lvl ? " Costs " + mass(DIG_COST[i]) + "." : "")));
+      if (i === lvl + 1) {
+        const fund = dig.fund || 0, cost = DIG_COST[i];
+        const bar = el("div", "bar"); const fill = el("span"); fill.style.width = Math.min(100, fund / cost * 100) + "%"; bar.appendChild(fill);
+        li.append(el("div", "meta", "Equipment fund: " + mass(fund) + " of " + mass(cost) + "."), bar);
+        const a = el("div", "acts");
+        for (const [lab, fr] of [["Give 10%", 0.1], ["Give half", 0.5], ["Give all", 1]]) {
+          const b = el("button", "ghost", lab); b.type = "button"; b.disabled = Math.floor(state.calcite * fr) < 1;
+          b.addEventListener("click", () => giveToDig(fr)); a.appendChild(b);
+        }
+        const buy = el("button", "main", "Buy"); buy.type = "button"; buy.disabled = fund < cost;
+        buy.addEventListener("click", buyEquipment); a.appendChild(buy);
+        li.appendChild(a);
+      }
+      eq.appendChild(li);
+    });
+    if (lvl >= DIG_TOOLS.length - 1) eq.appendChild(el("li", "empty", "The group has the best equipment there is."));
+    const contrib = dig.contrib ? Object.entries(dig.contrib).sort((a, b) => b[1] - a[1]) : [];
+    if (contrib.length) eq.appendChild(el("li", "empty", "Given so far: " + contrib.map(([u, a]) => (u === myId ? "you" : nameOf(u)) + " " + mass(a)).join(", ") + "."));
+
+    // museum
+    const mu = $("museum"); mu.textContent = "";
+    SITES.forEach((site, si) => {
+      site.finds.forEach((f, fi) => {
+        const got = si < dig.site || (si === dig.site && FIND_AT[fi] * site.depth <= D);
+        const card = el("div", "card museum-card" + (got ? "" : " unknown"));
+        const sv = document.createElementNS(NS, "svg"); sv.setAttribute("viewBox", "-30 -22 60 44");
+        if (got) drawFind(sv, f, 0, 0, 1.2, 1);
+        else { const q = svgEl(sv, "text", { x: 0, y: 7, "font-size": 20, "text-anchor": "middle", fill: "var(--muted)" }); q.textContent = "?"; }
+        card.appendChild(sv);
+        const body = el("div", "body");
+        body.append(el("div", "t", got ? f.name : si <= dig.site ? "Still in the ground" : "Deeper down"), el("div", "m", got ? f.text : site.name));
+        card.appendChild(body);
+        mu.appendChild(card);
+      });
+    });
   }
 
   // ---------------- bat fight ----------------
