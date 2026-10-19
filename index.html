@@ -1496,8 +1496,11 @@ main { padding-top: 18px; }
       return w * h > 0.3 * Math.min(a.width * a.height, b.width * b.height);
     };
     const rank = (d) => (d.noted ? -100 : 0) + priority.indexOf(d.kind);
+    // Things in or on the rock (fossils, handprints) and the glowworm lights are their own layers:
+    // they only need to stay clear of their own kind, not of the animals.
+    const layer = (k) => k === "ammonite" || k === "painting" ? "rock" : k === "glow" ? "light" : "cave";
     for (const d of drawn.slice().sort((a, b) => rank(a) - rank(b))) {
-      if (d.bb && !d.noted && kept.some(k => k.bb && overlaps(k.bb, d.bb))) { d.grp.remove(); if (d.kind === "bat") roosts.delete(d.it.id); continue; }
+      if (d.bb && !d.noted && kept.some(k => k.bb && layer(k.kind) === layer(d.kind) && overlaps(k.bb, d.bb))) { d.grp.remove(); if (d.kind === "bat") roosts.delete(d.it.id); continue; }
       kept.push(d);
     }
     for (const d of drawn) if (d.noted && d.grp.isConnected) spots.push({ it: d.it, grp: d.grp });
