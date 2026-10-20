@@ -367,7 +367,7 @@ main { padding-top: 18px; }
         </section>
         <section>
           <h2>Visitors you received</h2>
-          <p class="sub">What people in your group have sent you. They stay with you when you move to a new cave.</p>
+          <p class="sub">What people in your group have sent you. Visitors stay for a while (most for a week), then move on unless someone sends another. They follow you to a new cave. Your own unlocked ones always stay.</p>
           <ul class="list" id="visitors"></ul>
         </section>
       </div>
@@ -626,18 +626,18 @@ main { padding-top: 18px; }
 
   // Visitors you can unlock and send. "at" is all-time calcite, across every cave you've had.
   const KINDS = [
-    { id: "bat",      name: "Bat",             plural: "bats",        at: 2e3,   cd: 6 * HOUR,  cap: 10, eff: { drips: 0.05 }, desc: "Roosts upside down on the ceiling. Its guano feeds the soil." },
-    { id: "spider",   name: "Cave spider",     plural: "spiders",     at: 2e4,   cd: 6 * HOUR,  cap: 10, eff: { drop: 0.03 },  desc: "Spins a web in a quiet corner and waits." },
-    { id: "glow",     name: "Glowworms",       plural: "glowworm colonies", at: 1e5, cd: 12 * HOUR, cap: 10, eff: { drips: 0.04 }, desc: "A colony of tiny blue lights on the ceiling." },
-    { id: "deer",     name: "Deer",            plural: "deer",        at: 3e5,   cd: DAY,       cap: 5,  eff: { drop: 0.10 },  active: 3 * DAY, after: "once only bones remain", desc: "Falls through a sinkhole. In 3 days only bones remain." },
-    { id: "ammonite", name: "Ammonite fossil", plural: "ammonites",   at: 6e5,   cd: 2 * DAY,   cap: 5,  eff: { drop: 0.08 },  desc: "A spiral shell from an ancient sea, exposed in the rock." },
-    { id: "fox",      name: "Fox",             plural: "foxes",       at: 1.5e6, cd: DAY,       cap: 5,  eff: { drips: 0.08 }, desc: "Curls up to sleep. Its digging opens new cracks." },
-    { id: "olm",      name: "Olm",             plural: "olms",        at: 4e6,   cd: 2 * DAY,   cap: 5,  eff: { drop: 0.10 },  desc: "A pale, blind cave salamander that can live a century. People once thought olms were baby dragons." },
-    { id: "caver",    name: "Caver",           plural: "cavers",      at: 1.2e7, cd: DAY,       cap: 5,  eff: { both: 0.10 },  active: DAY, after: "after a day of surveying", desc: "Explores the cave for a day, then leaves a survey marker." },
-    { id: "geode",    name: "Geode",           plural: "geodes",      at: 3e7,   cd: 3 * DAY,   cap: 3,  eff: { drop: 0.15 },  desc: "A cracked stone full of purple crystals." },
-    { id: "painting", name: "Cave painting",   plural: "paintings",   at: 8e7,   cd: 3 * DAY,   cap: 3,  eff: { drips: 0.15 }, desc: "An ochre handprint, left on the wall long ago." },
-    { id: "bear",     name: "Cave bear",       plural: "cave bears",  at: 2.5e8, cd: 7 * DAY,   cap: 3,  eff: { both: 0.25 },  active: 14 * DAY, after: "once only bones remain", desc: "Lies down to hibernate and never wakes. After two weeks only bones remain." },
-    { id: "dragon",   name: "Dragon",          plural: "dragons",     at: 1e9,   cd: 14 * DAY,  cap: 1,  eff: { both: 1.0 },   desc: "The olm legends were right. It sleeps on a pile of gold." }
+    { id: "bat",      name: "Bat",             plural: "bats",        at: 2e3,   cd: 6 * HOUR,  stay: 7 * DAY, cap: 10, eff: { drips: 0.05 }, desc: "Roosts upside down on the ceiling. Its guano feeds the soil." },
+    { id: "spider",   name: "Cave spider",     plural: "spiders",     at: 2e4,   cd: 6 * HOUR,  stay: 7 * DAY, cap: 10, eff: { drop: 0.03 },  desc: "Spins a web in a quiet corner and waits." },
+    { id: "glow",     name: "Glowworms",       plural: "glowworm colonies", at: 1e5, cd: 12 * HOUR, stay: 7 * DAY, cap: 10, eff: { drips: 0.04 }, desc: "A colony of tiny blue lights on the ceiling." },
+    { id: "deer",     name: "Deer",            plural: "deer",        at: 3e5,   cd: DAY,       stay: 10 * DAY, cap: 5,  eff: { drop: 0.10 },  active: 3 * DAY, after: "once only bones remain", desc: "Falls through a sinkhole. In 3 days only bones remain." },
+    { id: "ammonite", name: "Ammonite fossil", plural: "ammonites",   at: 6e5,   cd: 2 * DAY,   stay: 14 * DAY, cap: 5,  eff: { drop: 0.08 },  desc: "A spiral shell from an ancient sea, exposed in the rock." },
+    { id: "fox",      name: "Fox",             plural: "foxes",       at: 1.5e6, cd: DAY,       stay: 7 * DAY, cap: 5,  eff: { drips: 0.08 }, desc: "Curls up to sleep. Its digging opens new cracks." },
+    { id: "olm",      name: "Olm",             plural: "olms",        at: 4e6,   cd: 2 * DAY,   stay: 14 * DAY, cap: 5,  eff: { drop: 0.10 },  desc: "A pale, blind cave salamander that can live a century. People once thought olms were baby dragons." },
+    { id: "caver",    name: "Caver",           plural: "cavers",      at: 1.2e7, cd: DAY,       stay: 3 * DAY, cap: 5,  eff: { both: 0.10 },  active: DAY, after: "after a day of surveying", desc: "Explores the cave for a day, then leaves a survey marker." },
+    { id: "geode",    name: "Geode",           plural: "geodes",      at: 3e7,   cd: 3 * DAY,   stay: 14 * DAY, cap: 3,  eff: { drop: 0.15 },  desc: "A cracked stone full of purple crystals." },
+    { id: "painting", name: "Cave painting",   plural: "paintings",   at: 8e7,   cd: 3 * DAY,   stay: 14 * DAY, cap: 3,  eff: { drips: 0.15 }, desc: "An ochre handprint, left on the wall long ago." },
+    { id: "bear",     name: "Cave bear",       plural: "cave bears",  at: 2.5e8, cd: 7 * DAY,   stay: 21 * DAY, cap: 3,  eff: { both: 0.25 },  active: 14 * DAY, after: "once only bones remain", desc: "Lies down to hibernate and never wakes. After two weeks only bones remain." },
+    { id: "dragon",   name: "Dragon",          plural: "dragons",     at: 1e9,   cd: 14 * DAY,  stay: 21 * DAY, cap: 1,  eff: { both: 1.0 },   desc: "The olm legends were right. It sleeps on a pile of gold." }
   ];
   const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
 
@@ -715,7 +715,14 @@ main { padding-top: 18px; }
   // No spoilers: a visitor of a kind you haven't unlocked yourself shows up censored (a black box, and its
   // message blacked out). It doesn't count for bonuses until you unlock that kind; then it's revealed.
   const known = (g) => !!state.unlocked[g.kind];
-  const knownGifts = () => myGifts.filter(known);
+  // A visitor's life starts when it arrives, or, if it arrived censored, when you unlock its kind,
+  // so a deer revealed late still arrives fresh. Received visitors move on after a while unless sent again;
+  // your own unlocked ones stay for good.
+  const startOf = (g) => (g.from && state.unlocked[g.kind]) ? Math.max(g.sentAt, state.unlocked[g.kind]) : g.sentAt;
+  const expired = (g, now = Date.now()) => !!(g.from && known(g) && now - startOf(g) > KIND[g.kind].stay);
+  // What's actually in your cave right now: unexpired, with times shifted for late reveals.
+  const present = (now = Date.now()) => myGifts.filter(g => !expired(g, now)).map(g => known(g) && g.from ? Object.assign({}, g, { sentAt: startOf(g), arrived: g.sentAt }) : g);
+  const knownGifts = () => present().filter(known);
   // Messages of censored visitors can be read anyway, all at once or one by one. The visitor itself stays censored.
   const noteReadable = (g) => known(g) || state.showCensored || state.revealedNotes.includes(g.id);
   let project = null;       // the group's project document
@@ -730,7 +737,7 @@ main { padding-top: 18px; }
   function giftBonus(now) {
     let drips = 1, drop = 1;
     for (const k of KINDS) {
-      const n = Math.min(k.cap, myGifts.filter(g => g.kind === k.id && known(g) && isActive(g, now)).length);
+      const n = Math.min(k.cap, present(now).filter(g => g.kind === k.id && known(g) && isActive(g, now)).length);
       if (!n) continue;
       if (k.eff.drips) drips *= 1 + k.eff.drips * n;
       if (k.eff.drop) drop *= 1 + k.eff.drop * n;
@@ -920,6 +927,7 @@ main { padding-top: 18px; }
     renderJournal(); renderMove(); renderCollection(); renderVisitors();
     renderGroup(); renderProject(); renderRankings(); renderAtlas(); renderFight(); renderDig();
     if (!focusInside("news")) renderNotes();
+    if (db && group && myGifts.some(x => expired(x))) { const g = group; for (const x of myGifts.filter(x => expired(x))) F.deleteDoc(F.doc(db, "groups/" + g + "/gifts/" + x.id)).catch(() => {}); }
     updateBadges();
   }
 
@@ -1014,7 +1022,7 @@ main { padding-top: 18px; }
   function effText(k) {
     const e = k.eff, p = (v) => "+" + Math.round(v * 100) + "%";
     const what = e.drips ? p(e.drips) + " drips" : e.drop ? p(e.drop) + " calcite per drop" : p(e.both) + " drips and calcite per drop";
-    return what + " for each one you receive" + (k.after ? ", " + k.after : "") + " (counts up to " + k.cap + ")";
+    return what + " for each one staying with you" + (k.after ? ", " + k.after : "") + " (counts up to " + k.cap + "). Stays " + duration(k.stay / 1000) + " when sent";
   }
   function giftStatus(g, now) {
     const age = now - g.sentAt;
@@ -1025,7 +1033,7 @@ main { padding-top: 18px; }
   }
   function renderVisitors() {
     const ul = $("visitors"); ul.textContent = "";
-    if (!myGifts.length) { ul.appendChild(el("li", "empty", db && group ? "No visitors yet. Ask someone in your group to send one." : "Visitors arrive from other people's caves once you're in a group.")); return; }
+    if (!present().length) { ul.appendChild(el("li", "empty", db && group ? "No visitors yet. Ask someone in your group to send one." : "Visitors arrive from other people's caves once you're in a group.")); return; }
     const now = Date.now();
     for (const k of KINDS) {
       const gs = knownGifts().filter(g => g.kind === k.id).sort((a, b) => b.sentAt - a.sentAt);
@@ -1037,6 +1045,8 @@ main { padding-top: 18px; }
       const senders = [...new Set(gs.map(g => nameOf(g.from, g.fromNick)))].join(", ");
       const e = k.eff, per = e.drips || e.drop || e.both;
       li.append(el("div", "meta", "From " + senders + ". Newest: " + giftStatus(gs[0], now) + "."));
+      const leaves = Math.max(...gs.map(g => g.sentAt + k.stay));
+      li.append(el("div", "meta", (gs.length === 1 ? "Moves on" : "The last one moves on") + " in " + duration((leaves - now) / 1000) + ", unless someone sends another."));
       li.append(el("div", "meta", act ? "Giving +" + Math.round(per * act * 100) + "% " + (e.drips ? "drips" : e.drop ? "calcite per drop" : "to both") + (gs.length > k.cap ? " (only " + k.cap + " count)" : "") + "." : "No bonus yet."));
       for (const g of gs.filter(x => x.note).slice(0, 3)) {
         const m = el("div", "meta");
@@ -1052,11 +1062,11 @@ main { padding-top: 18px; }
     renderCensored(ul);
   }
   function renderCensored(ul) {
-    const hidden = myGifts.filter(g => !known(g)).sort((a, b) => b.sentAt - a.sentAt);
+    const hidden = present().filter(g => !known(g)).sort((a, b) => b.sentAt - a.sentAt);
     if (!hidden.length) return;
     const li = el("li");
     li.append(el("div", "who", hidden.length === 1 ? "1 censored visitor" : hidden.length + " censored visitors"));
-    li.append(el("div", "meta", "From " + [...new Set(hidden.map(g => nameOf(g.from, g.fromNick)))].join(", ") + ". You haven't unlocked " + (hidden.length === 1 ? "this kind" : "these") + " yet, so " + (hidden.length === 1 ? "it stays" : "they stay") + " blacked out and " + (hidden.length === 1 ? "doesn't" : "don't") + " count until you do."));
+    li.append(el("div", "meta", "From " + [...new Set(hidden.map(g => nameOf(g.from, g.fromNick)))].join(", ") + ". You haven't unlocked " + (hidden.length === 1 ? "this kind" : "these") + " yet, so " + (hidden.length === 1 ? "it stays" : "they stay") + " blacked out and " + (hidden.length === 1 ? "doesn't" : "don't") + " count until you do. " + (hidden.length === 1 ? "It waits" : "They wait") + " for you, and " + (hidden.length === 1 ? "its" : "their") + " visit only starts once you've unlocked " + (hidden.length === 1 ? "it" : "them") + "."));
     for (const g of hidden.filter(x => x.note).slice(0, 5)) {
       const m = el("div", "meta");
       if (noteReadable(g)) {
@@ -1598,8 +1608,8 @@ main { padding-top: 18px; }
 
   function currentView() {
     const homeOf = (unlocked, seed) => Object.keys(unlocked || {}).filter(k => KIND[k]).map(k => ({ id: "home-" + k + "-" + seed, kind: k, from: null, sentAt: unlocked[k] }));
-    if (visiting) { const s = visiting.seed; return { cave: genCave(s, visiting.type), lifetime: visiting.lifetime || 0, gifts: (visiting.gifts || []).concat(homeOf(visiting.home, s)), dpm: visiting.dpm || 4 }; }
-    return { cave: genCave(state.seed, state.caveType), lifetime: state.lifetime, gifts: myGifts.concat(homeOf(state.unlocked, state.seed)), dpm: dripsPerMin() };
+    if (visiting) { const s = visiting.seed; return { cave: genCave(s, visiting.type), lifetime: visiting.lifetime || 0, gifts: (visiting.gifts || []).filter(g => Date.now() - g.sentAt <= KIND[g.kind].stay).concat(homeOf(visiting.home, s)), dpm: visiting.dpm || 4 }; }
+    return { cave: genCave(state.seed, state.caveType), lifetime: state.lifetime, gifts: present().concat(homeOf(state.unlocked, state.seed)), dpm: dripsPerMin() };
   }
 
   const tips = [];
@@ -2084,6 +2094,8 @@ main { padding-top: 18px; }
       advance(Date.now()); // bank earnings at the old rate before bonuses change
       myGifts = mine;
       revealCensored();
+      const gone = mine.filter(x => expired(x));
+      for (const x of gone) F.deleteDoc(F.doc(db, "groups/" + g + "/gifts/" + x.id)).catch(() => {});
       render(true);
     }, () => {}));
   }
