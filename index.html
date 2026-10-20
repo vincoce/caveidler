@@ -225,6 +225,14 @@ main { padding-top: 18px; }
 .lede.small { font-size: 0.9rem; margin-top: 34px; }
 .news { margin: 0 0 14px; }
 .news:empty { display: none; }
+.news { display: grid; gap: 6px; color: var(--ink); }
+.news li { margin: 0; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 9px 10px 9px 14px; border: 1px solid var(--line); border-left: 3px solid var(--water); border-radius: 4px; background: var(--panel); font-size: 0.925rem; }
+.news li.toast { grid-template-columns: 1fr; border-left-color: var(--muted); color: var(--muted); }
+.news li.nfoot { display: flex; gap: 12px; justify-content: flex-end; border: 0; background: none; padding: 0 2px; font-size: 0.85rem; }
+.news .nwhen { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.news .nclose { background: none; border: 0; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.news .nclose:hover { color: var(--ink); }
+.news .nclose:focus-visible { outline: 2px solid var(--water); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
 .grid2 > li:nth-last-child(2) { border-bottom: 1px solid var(--line); }
 @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } .grid2 > li:nth-last-child(2) { border-bottom: 0; } }
@@ -663,7 +671,9 @@ main { padding-top: 18px; }
     choicesSeen: false,               // has the player looked at them yet
     public: prev ? prev.public : true, // listed in the rankings
     hiddenNotes: prev ? prev.hiddenNotes : [], // messages you closed
-    censored: prev ? prev.censored : []        // visitors that arrived before you'd unlocked their kind
+    censored: prev ? prev.censored : [],       // visitors that arrived before you'd unlocked their kind
+    showCensored: prev ? prev.showCensored : false, // read censored messages anyway
+    revealedNotes: prev ? prev.revealedNotes : []   // single censored messages you chose to read
   });
 
   function normalise(s) {
@@ -692,7 +702,9 @@ main { padding-top: 18px; }
       choicesSeen: !!s.choicesSeen,
       public: s.public !== false,
       hiddenNotes: Array.isArray(s.hiddenNotes) ? s.hiddenNotes.filter(x => typeof x === "string").slice(-300) : [],
-      censored: Array.isArray(s.censored) ? s.censored.filter(x => typeof x === "string").slice(-300) : []
+      censored: Array.isArray(s.censored) ? s.censored.filter(x => typeof x === "string").slice(-300) : [],
+      showCensored: !!s.showCensored,
+      revealedNotes: Array.isArray(s.revealedNotes) ? s.revealedNotes.filter(x => typeof x === "string").slice(-300) : []
     };
   }
   function loadLocal() { try { const raw = localStorage.getItem(KEY); return raw ? normalise(JSON.parse(raw)) : null; } catch { return null; } }
@@ -704,6 +716,8 @@ main { padding-top: 18px; }
   // message blacked out). It doesn't count for bonuses until you unlock that kind; then it's revealed.
   const known = (g) => !!state.unlocked[g.kind];
   const knownGifts = () => myGifts.filter(known);
+  // Messages of censored visitors can be read anyway, all at once or one by one. The visitor itself stays censored.
+  const noteReadable = (g) => known(g) || state.showCensored || state.revealedNotes.includes(g.id);
   let project = null;       // the group's project document
   let myId = null, db = null, canWrite = false;
   let visiting = null;
@@ -795,7 +809,59 @@ main { padding-top: 18px; }
   // ---------------- UI helpers ----------------
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const news = (text) => { const ul = $("news"); if (!ul) return; const li = el("li", null, text); ul.prepend(li); while (ul.children.length > 4) ul.lastChild.remove(); };
+  // Notifications at the top of every page. Things that happen (a visitor arrives, a find, a request) stay
+  // until you close them, also across visits. Confirmations of your own actions disappear by themselves.
+  const NOTES_KEY = "dripstone-notifications-v1";
+  let notes = [];
+  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]").filter(n => n && n.id && n.text).slice(0, 40); } catch {}
+  let showAllNotes = false;
+  const toasts = [];
+  function saveNotes() { try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes.slice(0, 40))); } catch {} }
+  function news(text, sticky = true) {
+    if (sticky) {
+      if (notes.length && notes[0].text === text && Date.now() - notes[0].at < 5000) return;
+      notes.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, at: Date.now() });
+      notes = notes.slice(0, 40); saveNotes();
+    } else {
+      const t = { id: "t" + Math.random().toString(36).slice(2, 8), text };
+      toasts.unshift(t);
+      setTimeout(() => { const i = toasts.indexOf(t); if (i >= 0) { toasts.splice(i, 1); renderNotes(); } }, 7000);
+    }
+    renderNotes();
+  }
+  const toast = (text) => news(text, false);
+  function closeNote(id) { notes = notes.filter(n => n.id !== id); saveNotes(); renderNotes(); }
+  function renderNotes() {
+    const ul = $("news"); if (!ul) return;
+    ul.textContent = "";
+    for (const t of toasts.slice(0, 3)) {
+      const li = el("li", "toast");
+      li.append(el("span", "ntext", t.text));
+      ul.appendChild(li);
+    }
+    const shown = showAllNotes ? notes : notes.slice(0, 4);
+    for (const n of shown) {
+      const li = el("li", "note");
+      const tx = el("span", "ntext", n.text);
+      const when = el("span", "nwhen", ago(n.at));
+      const x = el("button", "nclose", "\u00d7"); x.type = "button"; x.setAttribute("aria-label", "Close this notification");
+      x.addEventListener("click", () => closeNote(n.id));
+      li.append(tx, when, x);
+      ul.appendChild(li);
+    }
+    if (notes.length > 1) {
+      const li = el("li", "nfoot");
+      if (notes.length > 4) {
+        const more = el("button", "link", showAllNotes ? "Show fewer" : "Show all " + notes.length); more.type = "button";
+        more.addEventListener("click", () => { showAllNotes = !showAllNotes; renderNotes(); });
+        li.append(more, " ");
+      }
+      const all = el("button", "link", "Close all"); all.type = "button";
+      all.addEventListener("click", () => { notes = []; showAllNotes = false; saveNotes(); renderNotes(); });
+      li.appendChild(all);
+      ul.appendChild(li);
+    }
+  }
   // True while someone is typing or choosing inside that box, so a re-render doesn't wipe it.
   const focusInside = (id) => { const a = document.activeElement; return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && $(id) && $(id).contains(a)); };
 
@@ -853,6 +919,7 @@ main { padding-top: 18px; }
     minuteKey = key;
     renderJournal(); renderMove(); renderCollection(); renderVisitors();
     renderGroup(); renderProject(); renderRankings(); renderAtlas(); renderFight(); renderDig();
+    if (!focusInside("news")) renderNotes();
     updateBadges();
   }
 
@@ -916,7 +983,7 @@ main { padding-top: 18px; }
     state = freshCave(Object.assign({}, prev, { legacy, past, pastTotal: prev.pastTotal + prev.lifetime }));
     state.seed = choice.seed; state.caveType = choice.type;
     lastSceneKey = ""; lastVisKey = ""; moveKey = ""; atlasKey = "";
-    news("You found " + next.name + ", a " + next.type.name.toLowerCase() + ". The first drops are already falling.");
+    toast("You found " + next.name + ", a " + next.type.name.toLowerCase() + ". The first drops are already falling.");
     saveLocal(); pushCloud(true); go("cave"); render(true);
   }
 
@@ -990,10 +1057,26 @@ main { padding-top: 18px; }
     const li = el("li");
     li.append(el("div", "who", hidden.length === 1 ? "1 censored visitor" : hidden.length + " censored visitors"));
     li.append(el("div", "meta", "From " + [...new Set(hidden.map(g => nameOf(g.from, g.fromNick)))].join(", ") + ". You haven't unlocked " + (hidden.length === 1 ? "this kind" : "these") + " yet, so " + (hidden.length === 1 ? "it stays" : "they stay") + " blacked out and " + (hidden.length === 1 ? "doesn't" : "don't") + " count until you do."));
-    for (const g of hidden.filter(x => x.note).slice(0, 3)) {
+    for (const g of hidden.filter(x => x.note).slice(0, 5)) {
       const m = el("div", "meta");
-      m.append(el("span", "censor", "\u2588".repeat(12)), " a censored message from " + nameOf(g.from, g.fromNick) + ", " + dayStr(g.sentAt) + ".");
+      if (noteReadable(g)) {
+        m.append(el("span", "note-q", "\u201c" + g.note + "\u201d"), " from " + nameOf(g.from, g.fromNick) + ", " + dayStr(g.sentAt) + ". ");
+        if (!state.showCensored) { const h = el("button", "link", "Black it out again"); h.type = "button"; h.addEventListener("click", () => { state.revealedNotes = state.revealedNotes.filter(x => x !== g.id); saveLocal(); pushCloud(true); render(true); }); m.appendChild(h); }
+      } else {
+        m.append(el("span", "censor", "\u2588".repeat(12)), " a censored message from " + nameOf(g.from, g.fromNick) + ", " + dayStr(g.sentAt) + ". ");
+        const r = el("button", "link", "Read it anyway"); r.type = "button";
+        r.addEventListener("click", () => { state.revealedNotes = state.revealedNotes.concat([g.id]).slice(-300); saveLocal(); pushCloud(true); render(true); });
+        m.appendChild(r);
+      }
       li.appendChild(m);
+    }
+    if (hidden.some(x => x.note)) {
+      const lab = el("label", "check");
+      const cb = el("input"); cb.type = "checkbox"; cb.checked = !!state.showCensored;
+      cb.addEventListener("change", () => { state.showCensored = cb.checked; saveLocal(); pushCloud(true); render(true); });
+      lab.append(cb, " Always show messages from censored visitors (the visitors themselves stay hidden)");
+      lab.style.marginTop = "8px";
+      li.appendChild(lab);
     }
     ul.appendChild(li);
   }
@@ -1284,16 +1367,16 @@ main { padding-top: 18px; }
     if (!db || !group || groupState !== "ready") return;
     advance(Date.now());
     const amount = Math.floor(state.calcite * frac);
-    if (amount < 1) { news("You need at least 1 mg of calcite to give."); return; }
+    if (amount < 1) { toast("You need at least 1 mg of calcite to give."); return; }
     state.calcite -= amount; saveLocal(); render(true);
     const ref = F.doc(db, base() + "/project/main");
     try {
       if (!project) { try { await F.setDoc(ref, { total: 0, contrib: {}, created: Date.now() }); } catch {} }
       await F.updateDoc(ref, { total: F.increment(amount), ["contrib." + myId]: F.increment(amount) });
-      news("You gave " + mass(amount) + " of calcite to the column.");
+      toast("You gave " + mass(amount) + " of calcite to the column.");
     } catch (e) {
       state.calcite += amount; saveLocal(); render(true);
-      news("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
+      toast("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
     }
   }
   $("giveActs").addEventListener("click", (e) => { const b = e.target.closest("button[data-frac]"); if (b) contribute(Number(b.dataset.frac)); });
@@ -1624,9 +1707,9 @@ main { padding-top: 18px; }
       if (!bb || (!bb.width && !bb.height)) continue;
       const ax = bb.x + bb.width / 2, ceiling = bb.y + bb.height / 2 < 200;
       const ay = ceiling ? bb.y + bb.height : bb.y;
-      const hidden = !known(it);
+      const hidden = !noteReadable(it);
       const lines = hidden ? ["\u2588".repeat(14), "\u2588".repeat(9)] : wrap(it.note, k > 1.5 ? 18 : 24).slice(0, 4);
-      const from = "from " + nameOf(it.from, it.fromNick) + (hidden ? ", censored" : "");
+      const from = "from " + nameOf(it.from, it.fromNick) + (hidden ? ", censored" : !known(it) ? " (visitor censored)" : "");
       const w = Math.max(...lines.map(l => l.length), from.length * 0.9) * cw + pad * 2 + 10 * k;
       const h = (lines.length + 1) * lh + pad * 1.4;
       const r = { x: Math.min(796 - w, Math.max(4, ax - w / 2)), y: ceiling ? ay + 12 * k : ay - 12 * k - h, w, h };
@@ -1920,7 +2003,7 @@ main { padding-top: 18px; }
     for (const a of document.querySelectorAll(".menu a")) {
       if (a.dataset.page === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     }
-    if (name === "group") { seenGiftCount = myGifts.length; seenReqCount = requests.length; }
+    if (name === "group") { unseenGifts = 0; for (const r of requests) seenReqs.add(r.id); }
     if (name === "explore" && state.lifetime >= NEW_CAVE_AT && !state.choicesSeen) { state.choicesSeen = true; saveLocal(); }
     updateBadges();
     if (name === "rankings") loadRankings(false);
@@ -1934,14 +2017,14 @@ main { padding-top: 18px; }
   const go = (name) => { if (location.hash !== "#" + name) location.hash = name; else showPage(name); };
 
   // Small dots in the menu: a new cave is waiting to be chosen, or new visitors arrived.
-  let seenGiftCount = -1, seenReqCount = 0;
+  let unseenGifts = 0;            // new visitors since you last opened the Group page
+  const seenReqs = new Set();      // join requests you've already seen
   function updateBadges() {
     $("badgeExplore").hidden = !(state.lifetime >= NEW_CAVE_AT && !state.choicesSeen && page !== "explore");
-    if (seenGiftCount < 0) seenGiftCount = myGifts.length;
     $("badgeDig").hidden = !(digBadge && page !== "dig");
     // A dot when a new fight has happened that you haven't looked at yet.
     $("badgeFight").hidden = !(fight.week != null && fight.week !== fight.seen && fight.mine && page !== "fight");
-    $("badgeGroup").hidden = !((myGifts.length > seenGiftCount || requests.length > seenReqCount) && page !== "group");
+    $("badgeGroup").hidden = !((unseenGifts > 0 || requests.some(r => !seenReqs.has(r.id))) && page !== "group");
   }
 
   // ---------------- online play (Firebase) ----------------
@@ -1991,8 +2074,9 @@ main { padding-top: 18px; }
       const fresh = mine.filter(x => !state.seenGifts.includes(x.id));
       for (const x of fresh.slice(-4)) news(known(x)
         ? ARRIVE[x.kind](nameOf(x.from, x.fromNick)) + (x.note ? " Note: \u201c" + x.note + "\u201d" : "")
-        : "A censored visitor from " + nameOf(x.from, x.fromNick) + " arrived" + (x.note ? ", with a censored message" : "") + ". You'll see what it is once you unlock it.");
+        : "A censored visitor from " + nameOf(x.from, x.fromNick) + " arrived" + (x.note ? (state.showCensored ? ", with a message: \u201c" + x.note + "\u201d" : ", with a censored message") : "") + ". You'll see what it is once you unlock it.");
       if (fresh.length) {
+        if (page !== "group") unseenGifts += fresh.length;
         state.seenGifts = state.seenGifts.concat(fresh.map(x => x.id)).slice(-300);
         state.censored = state.censored.concat(fresh.filter(x => !known(x)).map(x => x.id)).slice(-300);
         saveLocal();
@@ -2051,12 +2135,12 @@ main { padding-top: 18px; }
       batch.set(logRef, { from: myId, to: o.id, kind, at: F.serverTimestamp(), giftId: giftRef.id });
       await batch.commit();
       state.sent[k] = Date.now(); noteFor[o.id] = ""; saveLocal(); pushCloud(true);
-      news(KIND[kind].name + " sent to " + nameOf(o.id) + "'s cave" + (note ? ", with your note." : "."));
+      toast(KIND[kind].name + " sent to " + nameOf(o.id) + "'s cave" + (note ? ", with your note." : "."));
       if (document.activeElement) document.activeElement.blur();
       render(true);
     } catch (e) {
-      if (e && e.code === "permission-denied") { loadSendlog(group); news("The server says that visitor isn't ready to send yet."); }
-      else news("The visitor couldn't be sent (" + ((e && e.code) || "error") + "). Try again in a moment.");
+      if (e && e.code === "permission-denied") { loadSendlog(group); toast("The server says that visitor isn't ready to send yet."); }
+      else toast("The visitor couldn't be sent (" + ((e && e.code) || "error") + "). Try again in a moment.");
     }
   }
 
@@ -2181,7 +2265,7 @@ main { padding-top: 18px; }
       if (!remote) return;
       remoteEpoch = Math.max(remoteEpoch, remote.epoch);
       if (remote.epoch > state.epoch) {
-        $("news").textContent = "";
+        notes = []; saveNotes(); renderNotes();
         adoptRemote(remote, "Everything was erased on another device, so this one starts over too.");
       }
     }, () => {});
@@ -2263,11 +2347,11 @@ main { padding-top: 18px; }
         if (groupData.publicId) keep(F.onSnapshot(F.collection(db, "directory/" + groupData.publicId + "/requests"), (snap) => {
           const before = requests.length;
           requests = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(r => !r.code);
-          if (requests.length > before && before >= 0 && seenReqCount >= 0) {
+          if (requests.length > before && before >= 0) {
             const newest = requests.slice().sort((a, b) => b.at - a.at)[0];
             if (newest && Date.now() - newest.at < 10 * MIN) news((newest.nick || "Someone") + " asked to join your group.");
           }
-          if (page === "group") seenReqCount = requests.length;
+          if (page === "group") for (const r of requests) seenReqs.add(r.id);
           render(true);
         }, () => {}));
       }
@@ -2295,7 +2379,7 @@ main { padding-top: 18px; }
         // A new group: you own it. The password itself is never stored, only a fingerprint of it.
         await F.setDoc(gref, { owner: myId, created: Date.now(), name: randomGroupName(), publicId: randomId(), hasPw: !!pw, listed: true, memberCount: 0, maxMembers: MAX_GROUP });
         if (pw) await F.setDoc(F.doc(db, "groups/" + code + "/secret/pw"), { hash: pwHash });
-        news("You created a new group. Share the code" + (pw ? " and the password" : "") + " with others.");
+        toast("You created a new group. Share the code" + (pw ? " and the password" : "") + " with others.");
       }
     } catch (e) { $("joinMsg").textContent = "Couldn't open that group (" + (e.code || "error") + ")."; return; }
     group = code;
@@ -2347,10 +2431,10 @@ main { padding-top: 18px; }
       requestFor = null; askOpen = null; $("joinMsg").textContent = "";
       setPending({ pub, name });
       watchPending();
-      news("Your request to join \u201c" + name + "\u201d was sent.");
+      toast("Your request to join \u201c" + name + "\u201d was sent.");
       go("group");
       render(true);
-    } catch (e) { news("Couldn't send the request (" + (e.code || "error") + ")."); }
+    } catch (e) { toast("Couldn't send the request (" + (e.code || "error") + ")."); }
   }
   $("reqBtn").addEventListener("click", () => {
     if (!requestFor) return;
@@ -2408,19 +2492,19 @@ main { padding-top: 18px; }
   const dirReq = (uid) => F.doc(db, "directory/" + groupData.publicId + "/requests/" + uid);
   async function acceptRequest(r) {
     try {
-      if ((groupData.memberCount || 0) >= (groupData.maxMembers || MAX_GROUP)) { news("The group is full. Raise the limit or remove someone first."); return; }
+      if ((groupData.memberCount || 0) >= (groupData.maxMembers || MAX_GROUP)) { toast("The group is full. Raise the limit or remove someone first."); return; }
       const batch = F.writeBatch(db);
       batch.set(F.doc(db, base() + "/members/" + r.id), { pw: "approved", joined: Date.now(), nick: r.nick || "Someone", by: myId });
       batch.update(F.doc(db, base()), { memberCount: F.increment(1), countBy: r.id });
       await batch.commit();
       await F.updateDoc(dirReq(r.id), { code: group });
-      news((r.nick || "Someone") + " is now in the group.");
-    } catch (e) { news("Couldn't accept (" + (e.code || "error") + ")."); }
+      toast((r.nick || "Someone") + " is now in the group.");
+    } catch (e) { toast("Couldn't accept (" + (e.code || "error") + ")."); }
   }
   async function declineRequest(r) {
     if (!confirm("Decline " + (r.nick || "this person") + "'s request?")) return;
     try { await F.deleteDoc(dirReq(r.id)); }
-    catch (e) { news("Couldn't decline (" + (e.code || "error") + ")."); }
+    catch (e) { toast("Couldn't decline (" + (e.code || "error") + ")."); }
   }
   // The owner keeps the group's public listing up to date.
   let dirSynced = "";
@@ -2444,7 +2528,7 @@ main { padding-top: 18px; }
       profile = snap.exists() ? snap.data() : profile;
       myNick = nick; nicks[myId] = nick;
       try { localStorage.setItem(JOIN_KEY, JSON.stringify({ group, nick })); } catch {}
-      news("You're now called " + nick + ".");
+      toast("You're now called " + nick + ".");
       if (document.activeElement) document.activeElement.blur();
       await pushCloud(true);
       render(true);
@@ -2502,9 +2586,9 @@ main { padding-top: 18px; }
     try {
       if (groupData.publicId) { try { await F.updateDoc(F.doc(db, "directory/" + groupData.publicId), { owner: o.id, updated: Date.now() }); } catch {} }
       await F.updateDoc(F.doc(db, base()), { owner: o.id });
-      news(nameOf(o.id) + " is now the owner of the group.");
+      toast(nameOf(o.id) + " is now the owner of the group.");
       return true;
-    } catch (e) { news("Couldn't hand over the group (" + (e.code || "error") + ")."); return false; }
+    } catch (e) { toast("Couldn't hand over the group (" + (e.code || "error") + ")."); return false; }
   }
   async function makeOwner(o) {
     if (!confirm("Make " + nameOf(o.id) + " the owner? They'll manage requests, settings and members, and you become a normal member.")) return;
@@ -2531,12 +2615,12 @@ main { padding-top: 18px; }
       const gs = await F.getDocs(F.query(F.collection(db, base() + "/gifts"), F.where("to", "==", o.id)));
       await Promise.all(gs.docs.map(d => F.deleteDoc(d.ref)));
       if (visiting && visiting.id === o.id) goHome();
-      news(nameOf(o.id) + " was removed from the group.");
-    } catch (e) { news("Couldn't remove that player (" + (e.code || "error") + ")."); }
+      toast(nameOf(o.id) + " was removed from the group.");
+    } catch (e) { toast("Couldn't remove that player (" + (e.code || "error") + ")."); }
   }
   async function allowBack(b) {
-    try { await F.deleteDoc(F.doc(db, base() + "/banned/" + b.id)); news((b.nick || "That player") + " can join again with the code."); }
-    catch (e) { news("Couldn't do that (" + (e.code || "error") + ")."); }
+    try { await F.deleteDoc(F.doc(db, base() + "/banned/" + b.id)); toast((b.nick || "That player") + " can join again with the code."); }
+    catch (e) { toast("Couldn't do that (" + (e.code || "error") + ")."); }
   }
 
   $("renameBtn").addEventListener("click", async () => {
@@ -2545,7 +2629,7 @@ main { padding-top: 18px; }
     if (groupData && name === groupData.name) return;
     try {
       await F.updateDoc(F.doc(db, base()), { name, renamedAt: F.serverTimestamp() });
-      news("The group is now called \u201c" + name + "\u201d.");
+      toast("The group is now called \u201c" + name + "\u201d.");
       pushCloud(true);
     } catch (e) { $("renameNote").textContent = e.code === "permission-denied" ? "The name can only change once a week." : "Couldn't rename (" + (e.code || "error") + ")."; }
   });
@@ -2723,14 +2807,14 @@ main { padding-top: 18px; }
     if (!db || !group || groupState !== "ready" || !dig) return;
     advance(Date.now());
     const amount = Math.floor(state.calcite * frac);
-    if (amount < 1) { news("You need at least 1 mg of calcite to give."); return; }
+    if (amount < 1) { toast("You need at least 1 mg of calcite to give."); return; }
     state.calcite -= amount; saveLocal(); render(true);
     try {
       await F.updateDoc(F.doc(db, base() + "/dig/main"), { fund: F.increment(amount), ["contrib." + myId]: F.increment(amount) });
-      news("You gave " + mass(amount) + " to the equipment fund.");
+      toast("You gave " + mass(amount) + " to the equipment fund.");
     } catch (e) {
       state.calcite += amount; saveLocal(); render(true);
-      news("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
+      toast("Couldn't give calcite (" + (e.code || "error") + "). It's back in your cave.");
     }
   }
   async function buyEquipment() {
@@ -2741,8 +2825,13 @@ main { padding-top: 18px; }
     const banked = Math.max(dig.progress || 0, Math.min(SITES[dig.site].depth, digDepth(Date.now() - 5 * MIN)));
     try {
       await F.updateDoc(F.doc(db, base() + "/dig/main"), { level: next, fund: F.increment(-cost), progress: banked, lastUpdate: F.serverTimestamp() });
-      news("The group bought: " + DIG_TOOLS[next].toLowerCase() + ". Digging is faster now.");
-    } catch (e) { news("Couldn't buy it (" + (e.code || "error") + "). Someone may have just bought it."); }
+      toast("The group bought: " + DIG_TOOLS[next].toLowerCase() + ". Digging is faster now.");
+    } catch (e) {
+      // Tell apart "someone beat you to it" from the server refusing for another reason.
+      let fresh = null; try { const d = await F.getDoc(F.doc(db, base() + "/dig/main")); fresh = d.exists() ? d.data() : null; } catch {}
+      if (fresh && (fresh.level || 0) >= next) toast("Someone in your group just bought it.");
+      else toast("The server refused the purchase (" + (e.code || "error") + "). If this keeps happening, the Firestore rules may need updating.");
+    }
   }
 
   // ---- drawing finds ----
@@ -3070,14 +3159,14 @@ main { padding-top: 18px; }
       const data = { pub: groupData.publicId, gname: (groupData.name || "A group").slice(0, 32), nick: myNick, moves: fight.draft.slice(), updated: Date.now() };
       await F.setDoc(F.doc(db, "fights/" + pw + "/bats/" + myId), data);
       fight.myPick = data; fight.pickWeek = pw;
-      news("Your bat is ready for Saturday's fight.");
+      toast("Your bat is ready for Saturday's fight.");
       render(true);
-    } catch (e) { news("Couldn't send your bat (" + (e.code || "error") + ")."); }
+    } catch (e) { toast("Couldn't send your bat (" + (e.code || "error") + ")."); }
   }
   async function withdrawBat() {
     const pw = pickWeekNow(Date.now());
     try { await F.deleteDoc(F.doc(db, "fights/" + pw + "/bats/" + myId)); fight.myPick = null; fight.draft = null; render(true); }
-    catch (e) { news("Couldn't do that (" + (e.code || "error") + ")."); }
+    catch (e) { toast("Couldn't do that (" + (e.code || "error") + ")."); }
   }
 
   $("fightRefresh").addEventListener("click", () => loadFight(true));
@@ -3219,7 +3308,7 @@ main { padding-top: 18px; }
 
   function catchUp(fromTick) {
     const away = Date.now() - fromTick, gain = advance(Date.now());
-    if (away > 60000 && gain > 0) news("While you were away for " + duration(away / 1000) + ", " + mass(gain) + " of calcite settled.");
+    if (away > 60000 && gain > 0) toast("While you were away for " + duration(away / 1000) + ", " + mass(gain) + " of calcite settled.");
   }
 
   $("wipe").addEventListener("click", async () => {
@@ -3229,7 +3318,7 @@ main { padding-top: 18px; }
     state = freshCave(); state.epoch = epoch; state.public = keepPublic;
     myGifts = [];
     if (visiting) goHome();
-    $("news").textContent = "";
+    notes = []; saveNotes(); renderNotes();
     lastSceneKey = ""; lastVisKey = ""; minuteKey = ""; moveKey = ""; atlasKey = "";
     saveLocal(); render(true);
     // Visitors live in the group, so remove the ones sent to you as well.
@@ -3240,7 +3329,7 @@ main { padding-top: 18px; }
       } catch {}
     }
     await pushCloud(true);
-    news("Everything was erased. A new cave begins.");
+    toast("Everything was erased. A new cave begins.");
     render(true);
   });
   document.addEventListener("visibilitychange", () => {
