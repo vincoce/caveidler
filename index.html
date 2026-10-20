@@ -184,6 +184,10 @@ details.owner summary { cursor: pointer; font-weight: 600; }
 .arena .big { font-family: "Young Serif", Georgia, serif; }
 .ribbon { display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--btn-ink); background: var(--ochre); border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: 3px; }
 [hidden] { display: none !important; }
+/* Long words or links in messages and names may break anywhere instead of widening the page. */
+body { overflow-wrap: anywhere; }
+.cols > *, .cards > *, .list > li, .rank li > *, .news li > *, .acts > *, .setrow > * { min-width: 0; }
+.note-q { word-break: break-word; }
 .menu .sm { display: none; }
 .bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0; }
 .bar span { display: block; height: 100%; background: var(--ochre); border-radius: 999px; }
