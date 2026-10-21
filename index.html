@@ -1661,48 +1661,66 @@ main { padding-top: 18px; }
     const SHOW_MAX = { bat: 4, spider: 2, glow: 2, deer: 2, ammonite: 3, fox: 2, olm: 2, caver: 2, geode: 2, painting: 3, bear: 1, dragon: 1 };
     const zOrder = ["ammonite", "painting", "glow", "spider", "bat", "geode", "olm", "fox", "deer", "bear", "dragon", "caver"];
     const priority = ["dragon", "bear", "caver", "deer", "fox", "olm", "geode", "bat", "spider", "painting", "ammonite", "glow"];
-    const drawn = [];
+    // One layer group per kind keeps the stacking order (fossils behind, cavers in front)
+    // while visitors are placed in priority order.
+    const zGroup = {};
+    for (const kind of zOrder) zGroup[kind] = svgEl(g, "g", {});
+    const overlaps = (a, b) => {
+      const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x), h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      if (w <= 0 || h <= 0) return false;
+      return w * h > 0.06 * Math.min(a.width * a.height, b.width * b.height);
+    };
+    // Things in or on the rock (fossils, handprints) and the glowworm lights are their own layers:
+    // they only need to stay clear of their own kind, not of the animals.
+    const layer = (k) => k === "ammonite" || k === "painting" ? "rock" : k === "glow" ? "light" : "cave";
+    const ceilingKinds = ["bat", "spider", "glow", "painting"];
+    // Draw one visitor; attempt 0 is its usual spot, later attempts try other spots.
+    function drawOne(grp, it, kind, attempt) {
+      grp.textContent = "";
+      const r = rng(hashStr(attempt ? it.id + "#" + attempt : it.id));
+      DRAW[kind](grp, cave, it, r, now);
+      let bb = null; try { bb = grp.getBBox(); } catch {}
+      if (!known(it)) {
+        // A same-size-for-everything black box, so not even its shape gives it away.
+        grp.textContent = ""; roosts.delete(it.id);
+        const cx = bb && bb.width ? bb.x + bb.width / 2 : 60 + rng(hashStr(it.id + "#" + attempt))() * 680;
+        const cy = bb && bb.width ? bb.y + bb.height / 2 : (ceilingKinds.includes(kind) ? cave.ceilAt(cx) + 26 : cave.floorAt(cx) - 22);
+        const bx = Math.min(796 - 88, Math.max(4, cx - 44)), by = Math.min(396 - 36, Math.max(4, cy - 18));
+        svgEl(grp, "rect", { x: bx, y: by, width: 88, height: 36, rx: 3, fill: "#0b0b0b", stroke: "#3a3a3a", "stroke-width": 1 });
+        const t1 = svgEl(grp, "text", { x: bx + 44, y: by + 16, "font-size": 11, "font-weight": 700, "letter-spacing": 1.5, fill: "#f2f2f2", "text-anchor": "middle" }); t1.textContent = "CENSORED";
+        const t2 = svgEl(grp, "text", { x: bx + 44, y: by + 28, "font-size": 8, fill: "#9a9a9a", "text-anchor": "middle" }); t2.textContent = "not unlocked yet";
+        for (const t of [t1, t2]) t.setAttribute("font-family", "Figtree, system-ui, sans-serif");
+        bb = { x: bx, y: by, width: 88, height: 36 };
+      }
+      const tip = document.createElementNS(NS, "title");
+      tip.textContent = known(it) ? KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "") : "Censored: you haven't unlocked this yet" + (it.from ? ". From " + nameOf(it.from, it.fromNick) : "");
+      grp.appendChild(tip);
+      return bb && bb.width ? bb : null;
+    }
+    const wanted = [];
     for (const kind of zOrder) {
       // Messages first, then your own unlocked one, then the newest.
       const pool = gifts.filter(x => x.kind === kind).sort((a, b) =>
         (noted.includes(b) - noted.includes(a)) || ((!b.from) - (!a.from)) || (b.sentAt - a.sentAt));
-      for (const it of pool.slice(0, SHOW_MAX[kind] || 2)) {
-        const grp = svgEl(g, "g", {});
-        const t = document.createElementNS(NS, "title");
-        DRAW[kind](grp, cave, it, rng(hashStr(it.id)), now);
-        let bb = null; try { bb = grp.getBBox(); } catch {}
-        if (!known(it)) {
-          // Swap the visitor for a same-size-for-everything black box, so not even its shape gives it away.
-          grp.textContent = ""; roosts.delete(it.id);
-          const ceilingKinds = ["bat", "spider", "glow", "painting"];
-          const cx = bb && bb.width ? bb.x + bb.width / 2 : 60 + rng(hashStr(it.id))() * 680;
-          const cy = bb && bb.width ? bb.y + bb.height / 2 : (ceilingKinds.includes(kind) ? cave.ceilAt(cx) + 26 : cave.floorAt(cx) - 22);
-          const bx = Math.min(796 - 88, Math.max(4, cx - 44)), by = Math.min(396 - 36, Math.max(4, cy - 18));
-          svgEl(grp, "rect", { x: bx, y: by, width: 88, height: 36, rx: 3, fill: "#0b0b0b", stroke: "#3a3a3a", "stroke-width": 1 });
-          const t1 = svgEl(grp, "text", { x: bx + 44, y: by + 16, "font-size": 11, "font-weight": 700, "letter-spacing": 1.5, fill: "#f2f2f2", "text-anchor": "middle" }); t1.textContent = "CENSORED";
-          const t2 = svgEl(grp, "text", { x: bx + 44, y: by + 28, "font-size": 8, fill: "#9a9a9a", "text-anchor": "middle" }); t2.textContent = "not unlocked yet";
-          for (const t of [t1, t2]) t.setAttribute("font-family", "Figtree, system-ui, sans-serif");
-          bb = { x: bx, y: by, width: 88, height: 36 };
-        }
-        const tip = document.createElementNS(NS, "title");
-        tip.textContent = known(it) ? KIND[kind].name + (it.from ? " from " + nameOf(it.from, it.fromNick) : "") : "Censored: you haven't unlocked this yet" + (it.from ? ". From " + nameOf(it.from, it.fromNick) : "");
-        grp.appendChild(tip);
-        drawn.push({ it, kind, grp, bb: bb && bb.width ? bb : null, noted: noted.includes(it) });
-      }
+      for (const it of pool.slice(0, SHOW_MAX[kind] || 2)) wanted.push({ it, kind, noted: noted.includes(it) });
     }
-    const kept = [];
-    const overlaps = (a, b) => {
-      const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x), h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
-      if (w <= 0 || h <= 0) return false;
-      return w * h > 0.3 * Math.min(a.width * a.height, b.width * b.height);
-    };
-    const rank = (d) => (d.noted ? -100 : 0) + priority.indexOf(d.kind);
-    // Things in or on the rock (fossils, handprints) and the glowworm lights are their own layers:
-    // they only need to stay clear of their own kind, not of the animals.
-    const layer = (k) => k === "ammonite" || k === "painting" ? "rock" : k === "glow" ? "light" : "cave";
-    for (const d of drawn.slice().sort((a, b) => rank(a) - rank(b))) {
-      if (d.bb && !d.noted && kept.some(k => k.bb && layer(k.kind) === layer(d.kind) && overlaps(k.bb, d.bb))) { d.grp.remove(); if (d.kind === "bat") roosts.delete(d.it.id); continue; }
-      kept.push(d);
+    const rank = (d) => (d.noted ? -100 : 0) + priority.indexOf(d.kind) * 10 + (d.it.from ? 1 : 0);
+    // Place the most important first. Anything that would sit on another visitor tries up to
+    // 12 other spots before giving up, so a fox or an olm finds its own patch of floor.
+    const kept = [], drawn = [];
+    for (const d of wanted.sort((a, b) => rank(a) - rank(b))) {
+      const grp = svgEl(zGroup[d.kind], "g", {});
+      let ok = false, bb = null;
+      for (let attempt = 0; attempt < 13 && !ok; attempt++) {
+        bb = drawOne(grp, d.it, d.kind, attempt);
+        // Animals keep a little space around them; things in the rock may sit closer together.
+        const pad = layer(d.kind) === "cave" ? 8 : 0;
+        const padded = bb && { x: bb.x - pad, y: bb.y - pad, width: bb.width + 2 * pad, height: bb.height + 2 * pad };
+        ok = !bb || !kept.some(k => k.bb && layer(k.kind) === layer(d.kind) && overlaps(k.bb, padded));
+      }
+      if (!ok && !d.noted) { grp.remove(); if (d.kind === "bat") roosts.delete(d.it.id); continue; }
+      const rec = Object.assign({}, d, { grp, bb });
+      kept.push(rec); drawn.push(rec);
     }
     for (const d of drawn) if (d.noted && d.grp.isConnected) spots.push({ it: d.it, grp: d.grp });
     drawBubbles(spots);
